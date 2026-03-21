@@ -1,5 +1,6 @@
 // Web Audio API drum synthesizer
 let audioCtx: AudioContext | null = null;
+const noiseBufferCache = new Map<number, AudioBuffer>();
 
 function getAudioContext(): AudioContext {
   if (!audioCtx) {
@@ -15,12 +16,17 @@ export async function initAudio(): Promise<void> {
   }
 }
 
-function createNoiseBuffer(ctx: AudioContext, duration: number): AudioBuffer {
-  const length = Math.max(1, Math.floor(ctx.sampleRate * duration));
-  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < length; i++) {
-    data[i] = Math.random() * 2 - 1;
+function getNoiseBuffer(ctx: AudioContext, duration: number): AudioBuffer {
+  const key = Math.round(duration * 1000);
+  let buffer = noiseBufferCache.get(key);
+  if (!buffer) {
+    const length = Math.max(1, Math.floor(ctx.sampleRate * duration));
+    buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    noiseBufferCache.set(key, buffer);
   }
   return buffer;
 }
@@ -57,7 +63,7 @@ export function playSnare() {
 
     // Noise burst
     const noise = ctx.createBufferSource();
-    noise.buffer = createNoiseBuffer(ctx, 0.2);
+    noise.buffer = getNoiseBuffer(ctx, 0.2);
     const noiseFilter = ctx.createBiquadFilter();
     noiseFilter.type = 'highpass';
     noiseFilter.frequency.value = 1500;
@@ -93,7 +99,7 @@ export function playOpenHiHat() {
     const now = ctx.currentTime;
 
     const noise = ctx.createBufferSource();
-    noise.buffer = createNoiseBuffer(ctx, 0.3);
+    noise.buffer = getNoiseBuffer(ctx, 0.3);
     const filter = ctx.createBiquadFilter();
     filter.type = 'highpass';
     filter.frequency.value = 7000;
@@ -116,7 +122,7 @@ export function playClosedHiHat() {
     const now = ctx.currentTime;
 
     const noise = ctx.createBufferSource();
-    noise.buffer = createNoiseBuffer(ctx, 0.1);
+    noise.buffer = getNoiseBuffer(ctx, 0.1);
     const filter = ctx.createBiquadFilter();
     filter.type = 'highpass';
     filter.frequency.value = 8000;
@@ -141,7 +147,7 @@ export function playClap() {
     // Three short bursts
     for (let i = 0; i < 3; i++) {
       const noise = ctx.createBufferSource();
-      noise.buffer = createNoiseBuffer(ctx, 0.03);
+      noise.buffer = getNoiseBuffer(ctx, 0.03);
       const filter = ctx.createBiquadFilter();
       filter.type = 'bandpass';
       filter.frequency.value = 2500;
@@ -159,7 +165,7 @@ export function playClap() {
 
     // Reverb tail
     const tail = ctx.createBufferSource();
-    tail.buffer = createNoiseBuffer(ctx, 0.2);
+    tail.buffer = getNoiseBuffer(ctx, 0.2);
     const tailFilter = ctx.createBiquadFilter();
     tailFilter.type = 'bandpass';
     tailFilter.frequency.value = 2500;

@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
+import { Link } from 'react-router';
 import svgPaths from '../imports/svg-9ke3e5drs7';
 import {
   INSTRUMENTS,
@@ -10,10 +11,14 @@ import {
 } from './components/audio-engine';
 import { useAuth } from './components/AuthProvider';
 import { supabase } from '../lib/supabase';
+import CookieConsent from './components/CookieConsent';
 
 type Grid = Record<InstrumentName, boolean[]>;
 
 type SavedBeat = { id?: string; grid: Grid; tempo: number };
+
+const BEAT_NAME_MAX = 100;
+const BEAT_NAME_PATTERN = /^[a-zA-Z0-9 _\-'.]+$/;
 
 function createEmptyGrid(): Grid {
   const grid: Partial<Grid> = {};
@@ -37,8 +42,8 @@ function Navbar({
   onSignOut: () => void;
 }) {
   return (
-    <div className="bg-[#18181b] relative shrink-0 w-full">
-      <div className="flex flex-row items-center justify-end overflow-clip rounded-[inherit] size-full">
+    <header className="bg-[#18181b] relative shrink-0 w-full">
+      <nav className="flex flex-row items-center justify-end overflow-clip rounded-[inherit] size-full">
         <div className="content-stretch flex items-center justify-end px-[40px] py-[24px] relative w-full">
           <div className="content-stretch flex gap-[8px] items-center justify-end relative z-10 shrink-0">
             {user ? (
@@ -74,44 +79,72 @@ function Navbar({
             )}
           </div>
           <div className="-translate-x-1/2 -translate-y-1/2 absolute bg-[#8200db] content-stretch flex items-center justify-center left-1/2 px-[16px] py-[4px] top-[calc(50%+1px)] pointer-events-none">
-            <p className="font-['IBM_Plex_Mono',monospace] font-black italic leading-[normal] relative shrink-0 text-[#f8fafc] text-[36px]">Super Beats</p>
+            <h1 className="font-['IBM_Plex_Mono',monospace] font-black italic leading-[normal] relative shrink-0 text-[#f8fafc] text-[36px]">Super Beats</h1>
           </div>
         </div>
-      </div>
+      </nav>
       <div aria-hidden="true" className="absolute border-[#3f3f47] border-b border-solid inset-0 pointer-events-none" />
-    </div>
+    </header>
   );
 }
 
+// ─── Instrument Colors ──────────────────────────────────────────
+
+type InstrumentColors = {
+  bg: string;
+  hit: string;
+  border: string;
+  glow: string;
+  label: string;
+};
+
+const INSTRUMENT_COLORS: Record<InstrumentName, InstrumentColors> = {
+  kick:        { bg: '#dc2626', hit: '#ef4444', border: '#f87171', glow: 'rgba(239, 68, 68, 0.7)',  label: '#f87171' },
+  snare:       { bg: '#2563eb', hit: '#3b82f6', border: '#60a5fa', glow: 'rgba(59, 130, 246, 0.7)', label: '#60a5fa' },
+  openHiHat:   { bg: '#0891b2', hit: '#06b6d4', border: '#22d3ee', glow: 'rgba(6, 182, 212, 0.7)', label: '#22d3ee' },
+  closedHiHat: { bg: '#ca8a04', hit: '#eab308', border: '#facc15', glow: 'rgba(234, 179, 8, 0.7)', label: '#facc15' },
+  clap:        { bg: '#c026d3', hit: '#d946ef', border: '#e879f9', glow: 'rgba(217, 70, 239, 0.7)', label: '#e879f9' },
+};
+
 // ─── Grid Cell ──────────────────────────────────────────────────
 
-function GridCell({
+const GridCell = memo(function GridCell({
   active,
   isCurrentStep,
   onClick,
+  ariaLabel,
+  colors,
 }: {
   active: boolean;
   isCurrentStep: boolean;
   onClick: () => void;
+  ariaLabel: string;
+  colors: InstrumentColors;
 }) {
-  let bg = active ? 'bg-[#8200db]' : 'bg-[#18181b]';
-  if (isCurrentStep && !active) bg = 'bg-[#27272a]';
-  if (isCurrentStep && active) bg = 'bg-[#ad46ff]';
+  const isFiring = isCurrentStep && active;
+
+  let backgroundColor = active ? colors.bg : '#18181b';
+  if (isCurrentStep && !active) backgroundColor = '#27272a';
+  if (isFiring) backgroundColor = colors.hit;
+
+  const borderColor = active || isCurrentStep ? colors.border : '#4a5565';
+  const boxShadow = isFiring ? `0 0 12px 3px ${colors.glow}, 0 0 24px 6px ${colors.glow}` : 'none';
 
   return (
     <button
       onClick={onClick}
-      className={`${bg} relative rounded-[8px] shrink-0 size-[40px] transition-colors duration-75 cursor-pointer hover:brightness-125`}
+      aria-label={ariaLabel}
+      style={{ backgroundColor, boxShadow, transition: 'background-color 75ms, box-shadow 75ms' }}
+      className="relative rounded-[8px] shrink-0 size-[40px] cursor-pointer hover:brightness-125"
     >
       <div
         aria-hidden="true"
-        className={`absolute border border-solid inset-0 pointer-events-none rounded-[8px] ${
-          active ? 'border-[#ad46ff]' : 'border-[#4a5565]'
-        } ${isCurrentStep ? 'border-[#ad46ff]' : ''}`}
+        style={{ borderColor }}
+        className="absolute border border-solid inset-0 pointer-events-none rounded-[8px] transition-colors duration-75"
       />
     </button>
   );
-}
+});
 
 // ─── Beat Maker ─────────────────────────────────────────────────
 
@@ -135,28 +168,43 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState<string | null>(null);
+  const [beatsLoading, setBeatsLoading] = useState(false);
+  const [overwriteConfirmName, setOverwriteConfirmName] = useState<string | null>(null);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gridRef = useRef(grid);
   gridRef.current = grid;
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+  const tempoRef = useRef(tempo);
+  tempoRef.current = tempo;
+
+  const savedBeatNames = useMemo(() => Object.keys(savedBeats), [savedBeats]);
 
   // Load saved beats: from Supabase when logged in, else from localStorage
   useEffect(() => {
+    setBeatsLoading(true);
     if (user) {
       supabase
         .from('beats')
         .select('id, name, grid, tempo')
         .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
         .then(({ data, error }) => {
           if (error) {
             console.error('Failed to fetch beats:', error);
-            return;
+            setSaveFeedback('Failed to load beats.');
+            setTimeout(() => setSaveFeedback(null), 3000);
+          } else {
+            const beats: Record<string, SavedBeat> = {};
+            for (const row of data || []) {
+              beats[row.name] = { id: row.id, grid: row.grid as Grid, tempo: row.tempo };
+            }
+            setSavedBeats(beats);
           }
-          const beats: Record<string, SavedBeat> = {};
-          for (const row of data || []) {
-            beats[row.name] = { id: row.id, grid: row.grid as Grid, tempo: row.tempo };
-          }
-          setSavedBeats(beats);
+          setBeatsLoading(false);
         });
     } else {
       try {
@@ -170,6 +218,7 @@ export default function App() {
           setSavedBeats(withSavedBeat);
         }
       } catch {}
+      setBeatsLoading(false);
     }
   }, [user?.id]);
 
@@ -186,7 +235,7 @@ export default function App() {
     stopPlayback();
     setIsPlaying(true);
     let step = 0;
-    const intervalMs = (60 / tempo / 4) * 1000; // 16th notes
+    const intervalMs = (60 / tempo / 4) * 1000;
 
     const tick = () => {
       setCurrentStep(step);
@@ -218,14 +267,60 @@ export default function App() {
     };
   }, []);
 
-  const toggleCell = (instrument: InstrumentName, step: number) => {
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+      if (e.key === 'Escape') {
+        setShowSaveModal(false);
+        setShowOpenModal(false);
+        setShowSignInModal(false);
+        setShowSignUpModal(false);
+        setDeleteConfirmName(null);
+        return;
+      }
+
+      if (e.code === 'Space' && !isTyping) {
+        e.preventDefault();
+        if (isPlayingRef.current) {
+          stopPlayback();
+        } else {
+          initAudio().then(() => {
+            const ms = (60 / tempoRef.current / 4) * 1000;
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
+            setIsPlaying(true);
+            let step = 0;
+            const tick = () => {
+              setCurrentStep(step);
+              const g = gridRef.current;
+              for (const inst of INSTRUMENTS) {
+                if (g[inst][step]) playInstrument(inst);
+              }
+              step = (step + 1) % STEPS;
+            };
+            tick();
+            intervalRef.current = setInterval(tick, ms);
+          });
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [stopPlayback]);
+
+  const toggleCell = useCallback((instrument: InstrumentName, step: number) => {
     setGrid((prev) => {
       const newGrid = { ...prev };
       newGrid[instrument] = [...prev[instrument]];
       newGrid[instrument][step] = !newGrid[instrument][step];
       return newGrid;
     });
-  };
+  }, []);
 
   const handlePlayback = async () => {
     if (isPlaying) {
@@ -245,11 +340,10 @@ export default function App() {
   const handleSaveBeat = () => {
     setShowSaveModal(true);
     setSaveName('');
+    setOverwriteConfirmName(null);
   };
 
-  const confirmSave = async () => {
-    if (!saveName.trim()) return;
-    const name = saveName.trim();
+  const executeSave = async (name: string) => {
     if (user) {
       const { data, error } = await supabase
         .from('beats')
@@ -260,7 +354,8 @@ export default function App() {
         .select('id')
         .single();
       if (error) {
-        console.error('Failed to save beat:', error);
+        setSaveFeedback('Failed to save beat. Please try again.');
+        setTimeout(() => setSaveFeedback(null), 3000);
         return;
       }
       setSavedBeats((prev) => ({ ...prev, [name]: { id: data?.id, grid, tempo } }));
@@ -270,10 +365,34 @@ export default function App() {
       localStorage.setItem('superbeats_saved', JSON.stringify(newSaved));
     }
     setShowSaveModal(false);
+    setOverwriteConfirmName(null);
+    setSaveFeedback('Beat saved!');
+    setTimeout(() => setSaveFeedback(null), 2000);
+  };
+
+  const confirmSave = async () => {
+    const name = saveName.trim();
+    if (!name) return;
+    if (name.length > BEAT_NAME_MAX) {
+      setSaveFeedback(`Beat name must be ${BEAT_NAME_MAX} characters or fewer.`);
+      setTimeout(() => setSaveFeedback(null), 3000);
+      return;
+    }
+    if (!BEAT_NAME_PATTERN.test(name)) {
+      setSaveFeedback('Beat name can only contain letters, numbers, spaces, hyphens, underscores, apostrophes, and periods.');
+      setTimeout(() => setSaveFeedback(null), 4000);
+      return;
+    }
+    if (savedBeats[name] && overwriteConfirmName !== name) {
+      setOverwriteConfirmName(name);
+      return;
+    }
+    await executeSave(name);
   };
 
   const handleOpenBeat = () => {
     setShowOpenModal(true);
+    setDeleteConfirmName(null);
   };
 
   const loadBeat = (name: string) => {
@@ -289,7 +408,12 @@ export default function App() {
   const deleteBeat = async (name: string) => {
     const beat = savedBeats[name];
     if (user && beat?.id) {
-      await supabase.from('beats').delete().eq('id', beat.id);
+      const { error } = await supabase.from('beats').delete().eq('id', beat.id);
+      if (error) {
+        setSaveFeedback('Failed to delete beat. Please try again.');
+        setTimeout(() => setSaveFeedback(null), 3000);
+        return;
+      }
     }
     const newSaved = { ...savedBeats };
     delete newSaved[name];
@@ -297,6 +421,7 @@ export default function App() {
     if (!user) {
       localStorage.setItem('superbeats_saved', JSON.stringify(newSaved));
     }
+    setDeleteConfirmName(null);
   };
 
   const handleSignIn = async () => {
@@ -338,7 +463,16 @@ export default function App() {
         onSignOut={signOut}
       />
 
-      <div className="flex-1 flex flex-col px-[40px] py-[40px]">
+      <main className="flex-1 flex flex-col px-[40px] py-[40px]">
+        {/* Save feedback toast */}
+        {saveFeedback && (
+          <div className={`mb-[16px] px-[16px] py-[10px] rounded-[8px] font-['IBM_Plex_Mono',monospace] font-medium text-[14px] text-center transition-opacity ${
+            saveFeedback.includes('Failed') ? 'bg-[#dc2626]/20 text-[#ef4444] border border-[#dc2626]/40' : 'bg-[#16a34a]/20 text-[#4ade80] border border-[#16a34a]/40'
+          }`}>
+            {saveFeedback}
+          </div>
+        )}
+
         {/* Playback Tools */}
         <div className="bg-[#18181b] relative rounded-tl-[12px] rounded-tr-[12px] shrink-0 w-full">
           <div className="overflow-clip rounded-[inherit] size-full">
@@ -452,7 +586,10 @@ export default function App() {
               </div>
               {INSTRUMENTS.map((inst) => (
                 <div key={inst} className="flex items-center p-[8px] h-[56px]">
-                  <p className="font-['IBM_Plex_Mono',monospace] font-medium leading-[normal] not-italic text-[20px] whitespace-nowrap text-[#a8a8ed]">
+                  <p
+                    style={{ color: INSTRUMENT_COLORS[inst].label }}
+                    className="font-['IBM_Plex_Mono',monospace] font-medium leading-[normal] not-italic text-[20px] whitespace-nowrap"
+                  >
                     {INSTRUMENT_LABELS[inst]}
                   </p>
                 </div>
@@ -484,6 +621,8 @@ export default function App() {
                       active={grid[inst][step]}
                       isCurrentStep={currentStep === step}
                       onClick={() => toggleCell(inst, step)}
+                      ariaLabel={`${INSTRUMENT_LABELS[inst]} step ${step + 1}${grid[inst][step] ? ', active' : ''}`}
+                      colors={INSTRUMENT_COLORS[inst]}
                     />
                   ))}
                 </div>
@@ -491,28 +630,44 @@ export default function App() {
             </div>
           </div>
         </div>
-      </div>
+      </main>
+
+      <footer className="shrink-0 border-t border-[#3f3f47] bg-[#18181b] px-[40px] py-[16px]">
+        <div className="flex items-center justify-center gap-[24px] font-['IBM_Plex_Mono',monospace] text-[12px] text-[#9f9fa9]">
+          <span>&copy; {new Date().getFullYear()} Super Beats</span>
+          <Link to="/privacy" className="hover:text-[#ad46ff] transition-colors">Privacy Policy</Link>
+          <Link to="/terms" className="hover:text-[#ad46ff] transition-colors">Terms of Service</Link>
+        </div>
+      </footer>
+
+      <CookieConsent />
 
       {/* Save Modal */}
       {showSaveModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowSaveModal(false)}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={() => setShowSaveModal(false)}>
           <div className="bg-[#18181b] border-2 border-[#3f3f47] rounded-[12px] p-[24px] w-[400px]" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-['IBM_Plex_Mono',monospace] font-medium text-[20px] text-[#f8fafc] mb-[16px]">Save Beat</h2>
             <input
               type="text"
               placeholder="Enter beat name..."
               value={saveName}
-              onChange={(e) => setSaveName(e.target.value)}
+              onChange={(e) => { setSaveName(e.target.value); setOverwriteConfirmName(null); }}
               onKeyDown={(e) => e.key === 'Enter' && confirmSave()}
+              maxLength={BEAT_NAME_MAX}
               autoFocus
               className="w-full bg-[#27272a] border border-[#3f3f47] rounded-[8px] px-[12px] py-[8px] text-[#f1f5f9] font-['IBM_Plex_Mono',monospace] text-[16px] outline-none focus:border-[#8200db] transition-colors"
             />
+            {overwriteConfirmName && (
+              <p className="mt-[12px] text-[#eab308] text-[13px] font-['IBM_Plex_Mono',monospace]">
+                A beat named "{overwriteConfirmName}" already exists. Press Save again to overwrite it.
+              </p>
+            )}
             <div className="flex gap-[8px] mt-[16px] justify-end">
               <button onClick={() => setShowSaveModal(false)} className="px-[16px] py-[8px] rounded-[8px] text-[#9f9fa9] font-['IBM_Plex_Mono',monospace] font-medium hover:bg-[#27272a] transition-colors cursor-pointer">
                 Cancel
               </button>
-              <button onClick={confirmSave} className="px-[16px] py-[8px] rounded-[8px] bg-[#8200db] text-[#f8fafc] font-['IBM_Plex_Mono',monospace] font-medium hover:bg-[#9b20ef] transition-colors cursor-pointer border border-[#ad46ff]">
-                Save
+              <button onClick={confirmSave} className={`px-[16px] py-[8px] rounded-[8px] font-['IBM_Plex_Mono',monospace] font-medium transition-colors cursor-pointer border ${overwriteConfirmName ? 'bg-[#ca8a04] text-[#f8fafc] hover:bg-[#eab308] border-[#eab308]' : 'bg-[#8200db] text-[#f8fafc] hover:bg-[#9b20ef] border-[#ad46ff]'}`}>
+                {overwriteConfirmName ? 'Overwrite' : 'Save'}
               </button>
             </div>
           </div>
@@ -521,21 +676,34 @@ export default function App() {
 
       {/* Open Modal */}
       {showOpenModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowOpenModal(false)}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={() => setShowOpenModal(false)}>
           <div className="bg-[#18181b] border-2 border-[#3f3f47] rounded-[12px] p-[24px] w-[400px] max-h-[500px] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-['IBM_Plex_Mono',monospace] font-medium text-[20px] text-[#f8fafc] mb-[16px]">Open Beat</h2>
-            {Object.keys(savedBeats).length === 0 ? (
+            {beatsLoading ? (
+              <p className="text-[#9f9fa9] font-['IBM_Plex_Mono',monospace] text-[16px]">Loading beats...</p>
+            ) : savedBeatNames.length === 0 ? (
               <p className="text-[#9f9fa9] font-['IBM_Plex_Mono',monospace] text-[16px]">No saved beats yet.</p>
             ) : (
               <div className="flex flex-col gap-[8px]">
-                {Object.keys(savedBeats).map((name) => (
+                {savedBeatNames.map((name) => (
                   <div key={name} className="flex items-center justify-between bg-[#27272a] border border-[#3f3f47] rounded-[8px] px-[12px] py-[10px]">
                     <button onClick={() => loadBeat(name)} className="text-[#f1f5f9] font-['IBM_Plex_Mono',monospace] font-medium text-[16px] hover:text-[#ad46ff] transition-colors cursor-pointer flex-1 text-left">
                       {name}
                     </button>
-                    <button onClick={() => deleteBeat(name)} className="text-[#9f9fa9] hover:text-[#ef4444] transition-colors cursor-pointer ml-[8px] text-[14px]">
-                      ✕
-                    </button>
+                    {deleteConfirmName === name ? (
+                      <div className="flex gap-[6px] items-center ml-[8px] shrink-0">
+                        <button onClick={() => deleteBeat(name)} className="text-[#ef4444] font-['IBM_Plex_Mono',monospace] text-[12px] font-medium hover:text-[#f87171] transition-colors cursor-pointer">
+                          Delete
+                        </button>
+                        <button onClick={() => setDeleteConfirmName(null)} className="text-[#9f9fa9] font-['IBM_Plex_Mono',monospace] text-[12px] font-medium hover:text-[#f1f5f9] transition-colors cursor-pointer">
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setDeleteConfirmName(name)} className="text-[#9f9fa9] hover:text-[#ef4444] transition-colors cursor-pointer ml-[8px] text-[14px]" aria-label={`Delete ${name}`}>
+                        ✕
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -551,7 +719,7 @@ export default function App() {
 
       {/* Sign In Modal */}
       {showSignInModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowSignInModal(false)}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={() => setShowSignInModal(false)}>
           <div className="bg-[#18181b] border-2 border-[#3f3f47] rounded-[12px] p-[24px] w-[400px]" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-['IBM_Plex_Mono',monospace] font-medium text-[20px] text-[#f8fafc] mb-[16px]">Log In</h2>
             {authError && <p className="text-[#ef4444] text-[14px] mb-[12px]">{authError}</p>}
@@ -560,6 +728,7 @@ export default function App() {
               placeholder="Email"
               value={authEmail}
               onChange={(e) => setAuthEmail(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSignIn()}
               className={modalInputClass}
             />
             <input
@@ -580,7 +749,7 @@ export default function App() {
 
       {/* Sign Up Modal */}
       {showSignUpModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowSignUpModal(false)}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={() => setShowSignUpModal(false)}>
           <div className="bg-[#18181b] border-2 border-[#3f3f47] rounded-[12px] p-[24px] w-[400px]" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-['IBM_Plex_Mono',monospace] font-medium text-[20px] text-[#f8fafc] mb-[16px]">Sign Up</h2>
             {authError && <p className="text-[#ef4444] text-[14px] mb-[12px]">{authError}</p>}
@@ -599,6 +768,12 @@ export default function App() {
               onKeyDown={(e) => e.key === 'Enter' && handleSignUp()}
               className={`${modalInputClass} mt-[12px]`}
             />
+            <p className="mt-[12px] text-[#9f9fa9] text-[12px] font-['IBM_Plex_Mono',monospace]">
+              By signing up you agree to our{' '}
+              <Link to="/terms" className="text-[#ad46ff] hover:underline" onClick={() => setShowSignUpModal(false)}>Terms of Service</Link>
+              {' '}and{' '}
+              <Link to="/privacy" className="text-[#ad46ff] hover:underline" onClick={() => setShowSignUpModal(false)}>Privacy Policy</Link>.
+            </p>
             <div className="flex gap-[8px] mt-[16px] justify-end">
               <button onClick={() => setShowSignUpModal(false)} className={`${modalButtonClass} text-[#9f9fa9] hover:bg-[#27272a]`}>Cancel</button>
               <button onClick={handleSignUp} className={`${modalButtonClass} bg-[#8200db] text-[#f8fafc] hover:bg-[#9b20ef] border border-[#ad46ff]`}>Sign Up</button>

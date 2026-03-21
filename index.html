@@ -1,15 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; base-uri 'self'; form-action 'self'" />
 
-  <!DOCTYPE html>
-  <html lang="en">
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>Enhance Beat Maker Functionality</title>
-    </head>
+    <title>Super Beats — Online Drum Machine & Beat Maker</title>
+    <meta name="description" content="Create, save, and share drum beats with Super Beats — a free online drum machine and step sequencer. Build beats with kick, snare, hi-hat, and clap sounds." />
+    <meta name="theme-color" content="#8200db" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="canonical" href="https://superbeats.app/" />
 
-    <body>
-      <div id="root"></div>
-      <script type="module" src="/src/main.tsx"></script>
-    </body>
-  </html>
-  
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Super Beats — Online Drum Machine & Beat Maker" />
+    <meta property="og:description" content="Create, save, and share drum beats with Super Beats — a free online drum machine and step sequencer." />
+    <meta property="og:url" content="https://superbeats.app/" />
+    <meta property="og:image" content="https://superbeats.app/favicon.png" />
+    <meta property="og:site_name" content="Super Beats" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Super Beats — Online Drum Machine & Beat Maker" />
+    <meta name="twitter:description" content="Create, save, and share drum beats with Super Beats — a free online drum machine and step sequencer." />
+    <meta name="twitter:image" content="https://superbeats.app/favicon.png" />
+
+    <!-- Preconnect to third-party origins -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://vpnjklvoctqklppseoaq.supabase.co" />
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Super Beats",
+        "url": "https://superbeats.app/",
+        "description": "A free online drum machine and step sequencer. Create beats with kick, snare, hi-hat, and clap sounds.",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Any",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
