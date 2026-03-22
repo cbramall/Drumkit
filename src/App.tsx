@@ -445,28 +445,6 @@ export default function App() {
                       </button>
                     )}
                     <button
-                      onClick={undo}
-                      disabled={!canUndo}
-                      title="Undo (Ctrl+Z / ⌘Z)"
-                      className="synth-btn-chrome flex items-center justify-center px-[10px] py-[10px] shrink-0 rounded-[4px] transition-opacity disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      <svg className="shrink-0 size-[14px]" viewBox="0 0 16 16" fill="none">
-                        <path d="M3 8.5A5 5 0 1 1 5.5 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                        <polyline points="3,5 3,9 7,9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={redo}
-                      disabled={!canRedo}
-                      title="Redo (Ctrl+Shift+Z / ⌘⇧Z)"
-                      className="synth-btn-chrome flex items-center justify-center px-[10px] py-[10px] shrink-0 rounded-[4px] transition-opacity disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      <svg className="shrink-0 size-[14px]" viewBox="0 0 16 16" fill="none">
-                        <path d="M13 8.5A5 5 0 1 0 10.5 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                        <polyline points="13,5 13,9 9,9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
-                    <button
                       onClick={handleNewBeat}
                       className="synth-btn-chrome flex gap-[6px] items-center justify-center px-[12px] py-[10px] shrink-0 cursor-pointer rounded-[4px]"
                     >
@@ -541,6 +519,31 @@ export default function App() {
                         )}
                       </div>
                       <p className="font-['Press_Start_2P',cursive] text-[8px] tracking-[0.05em]">{isPlaying ? 'STOP' : 'PLAY'}</p>
+                    </button>
+
+                    <div className="w-px h-[20px] bg-[#2a3a6a] mx-[4px] shrink-0" aria-hidden="true" />
+
+                    <button
+                      onClick={undo}
+                      disabled={!canUndo}
+                      title="Undo (Ctrl+Z / ⌘Z)"
+                      className="synth-btn-chrome flex items-center justify-center px-[10px] py-[10px] shrink-0 rounded-[4px] transition-opacity disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <svg className="shrink-0 size-[14px]" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 8.5A5 5 0 1 1 5.5 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                        <polyline points="3,5 3,9 7,9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={redo}
+                      disabled={!canRedo}
+                      title="Redo (Ctrl+Shift+Z / ⌘⇧Z)"
+                      className="synth-btn-chrome flex items-center justify-center px-[10px] py-[10px] shrink-0 rounded-[4px] transition-opacity disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <svg className="shrink-0 size-[14px]" viewBox="0 0 16 16" fill="none">
+                        <path d="M13 8.5A5 5 0 1 0 10.5 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                        <polyline points="13,5 13,9 9,9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
                     </button>
                   </div>
 
