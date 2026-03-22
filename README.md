@@ -70,6 +70,12 @@ Run the SQL migrations **in order** in the Supabase SQL Editor:
 pnpm dev
 ```
 
+### Type Checking
+
+```bash
+pnpm typecheck
+```
+
 ### Production Build
 
 ```bash
@@ -170,6 +176,7 @@ Update the placeholder domain (`beatz-maker.netlify.app`) to your actual domain 
 |----------|------------|
 | Framework | React 18 |
 | Build | Vite 6 |
+| Language | TypeScript 5 (strict mode) |
 | Styling | Tailwind CSS 4 |
 | Audio | Web Audio API (browser-native) |
 | Backend / Auth | Supabase (Postgres + Auth) |
