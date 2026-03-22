@@ -1,3 +1,502 @@
 @import './fonts.css';
 @import './tailwind.css';
-@import './theme.css';
+
+/* ── 80s Retro Chrome ──────────────────────────────────────────── */
+
+.retro-bg {
+  background: transparent;
+}
+
+/* ── Static Synthwave Scene ───────────────────────────────────── */
+
+.retro-scene {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  background: #020010;
+}
+
+/* Dark sky with subtle star-like noise and purple gradient */
+.retro-scene-sky {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 40%;
+  background:
+    radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.7), transparent),
+    radial-gradient(1px 1px at 25% 8%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 40% 22%, rgba(255,255,255,0.6), transparent),
+    radial-gradient(1px 1px at 55% 5%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 65% 18%, rgba(255,255,255,0.7), transparent),
+    radial-gradient(1px 1px at 80% 12%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 90% 25%, rgba(255,255,255,0.6), transparent),
+    radial-gradient(1px 1px at 15% 30%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 35% 35%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 50% 28%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 70% 32%, rgba(255,255,255,0.6), transparent),
+    radial-gradient(1px 1px at 85% 6%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 5% 20%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 48% 14%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 72% 9%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 20% 3%, rgba(255,255,255,0.6), transparent),
+    radial-gradient(1px 1px at 60% 38%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 95% 20%, rgba(255,255,255,0.5), transparent),
+    linear-gradient(
+      180deg,
+      #020010 0%,
+      #06001a 20%,
+      #0e0030 40%,
+      #1a0048 60%,
+      #2a0060 80%,
+      #3d0070 100%
+    );
+}
+
+/* Sun: half circle sitting on the horizon */
+.retro-scene-sun {
+  position: absolute;
+  width: 280px;
+  height: 140px;
+  left: 50%;
+  top: 60%;
+  transform: translate(-50%, -100%);
+  border-radius: 280px 280px 0 0;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0px,
+      transparent 8px,
+      rgba(2, 0, 16, 0.7) 8px,
+      rgba(2, 0, 16, 0.7) 12px
+    ),
+    linear-gradient(
+      180deg,
+      #ffdd00 0%,
+      #ffaa00 20%,
+      #ff6a00 40%,
+      #ff2a6d 65%,
+      #e020a0 85%,
+      #c010d0 100%
+    );
+  box-shadow:
+    0 0 60px 20px rgba(255, 100, 0, 0.35),
+    0 0 120px 40px rgba(255, 40, 100, 0.25),
+    0 0 200px 80px rgba(200, 20, 180, 0.15);
+  z-index: 0;
+}
+
+/* Purple / magenta glow around the horizon */
+.retro-scene-glow {
+  position: absolute;
+  top: 52%;
+  left: 0;
+  right: 0;
+  height: 20%;
+  background: radial-gradient(
+    ellipse 70% 100% at 50% 0%,
+    rgba(200, 30, 200, 0.4) 0%,
+    rgba(140, 0, 180, 0.2) 40%,
+    transparent 70%
+  );
+  z-index: 0;
+}
+
+/* Bright horizon line */
+.retro-scene-horizon {
+  position: absolute;
+  top: 60%;
+  left: -10%;
+  right: -10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 5%, #ff40ff 20%, #00e5ff 50%, #ff40ff 80%, transparent 95%);
+  box-shadow:
+    0 0 20px 6px rgba(255, 64, 255, 0.5),
+    0 0 60px 15px rgba(255, 64, 255, 0.25),
+    0 0 100px 30px rgba(0, 229, 255, 0.15);
+  z-index: 2;
+}
+
+/* Perspective neon grid floor */
+.retro-scene-floor {
+  position: absolute;
+  top: 60%;
+  left: -100%;
+  width: 300%;
+  bottom: 0;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 230, 255, 0.3) 0px,
+      transparent 2px,
+      transparent 60px
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgba(0, 230, 255, 0.2) 0px,
+      transparent 2px,
+      transparent 30px
+    ),
+    linear-gradient(180deg, #0a0020 0%, #020010 100%);
+  transform: perspective(350px) rotateX(55deg);
+  transform-origin: 50% 0%;
+  z-index: 1;
+  background-size: 60px 60px, 30px 30px, 100% 100%;
+  animation: grid-scroll 4s linear infinite;
+}
+
+@keyframes grid-scroll {
+  from { background-position: 0 0, 0 0, 0 0; }
+  to   { background-position: 0 0, 0 30px, 0 0; }
+}
+
+.chrome-text {
+  background: linear-gradient(
+    180deg,
+    #7baad4 0%,
+    #e8f4ff 18%,
+    #b8d8f8 35%,
+    #5a7ea8 50%,
+    #a8cce8 65%,
+    #d8ecff 80%,
+    #4a6fa5 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 12px rgba(168, 200, 232, 0.4)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8));
+}
+
+.neon-border-pink {
+  border-color: rgba(255, 45, 120, 0.6);
+  box-shadow:
+    0 0 6px rgba(255, 45, 120, 0.35),
+    inset 0 0 6px rgba(255, 45, 120, 0.08);
+}
+
+.neon-border-bottom {
+  box-shadow: 0 1px 12px rgba(255, 45, 120, 0.25), 0 1px 4px rgba(255, 45, 120, 0.15);
+}
+
+.scanlines::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.035) 2px,
+    rgba(0, 0, 0, 0.035) 4px
+  );
+  mix-blend-mode: multiply;
+}
+
+.retro-panel {
+  background: linear-gradient(180deg, rgba(17, 22, 56, 0.6) 0%, rgba(13, 18, 48, 0.6) 100%);
+  border-color: rgba(42, 58, 106, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  isolation: isolate;
+}
+
+.retro-btn-pink {
+  background: linear-gradient(180deg, #ff3d8a 0%, #e6206a 100%);
+  border-color: #ff5a9e;
+  box-shadow: 0 0 10px rgba(255, 45, 120, 0.4), 0 0 20px rgba(255, 45, 120, 0.15);
+  transition: box-shadow 0.2s, background 0.2s;
+}
+.retro-btn-pink:hover {
+  background: linear-gradient(180deg, #ff5a9e 0%, #ff2d78 100%);
+  box-shadow: 0 0 14px rgba(255, 45, 120, 0.55), 0 0 28px rgba(255, 45, 120, 0.25);
+}
+
+.retro-btn-stop {
+  background: linear-gradient(180deg, #ff4569 0%, #e01535 100%);
+  border-color: #ff6b8a;
+  box-shadow: 0 0 10px rgba(255, 23, 68, 0.4), 0 0 20px rgba(255, 23, 68, 0.15);
+  transition: box-shadow 0.2s, background 0.2s;
+}
+.retro-btn-stop:hover {
+  background: linear-gradient(180deg, #ff6b8a 0%, #ff1744 100%);
+  box-shadow: 0 0 14px rgba(255, 23, 68, 0.55), 0 0 28px rgba(255, 23, 68, 0.25);
+}
+
+/* ── Synth-Pop Sequencer ──────────────────────────────────────── */
+
+.synth-toolbar {
+  background: linear-gradient(180deg, rgba(12, 15, 40, 0.72) 0%, rgba(8, 11, 30, 0.78) 100%);
+  border-color: rgba(26, 32, 80, 0.7);
+  box-shadow:
+    0 0 12px rgba(0, 180, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.synth-grid-panel {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 200, 255, 0.015) 2px,
+      rgba(0, 200, 255, 0.015) 4px
+    ),
+    radial-gradient(ellipse at 50% 0%, rgba(0, 140, 255, 0.06) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(6, 9, 32, 0.5) 0%, rgba(4, 7, 20, 0.5) 100%);
+  border-color: rgba(26, 32, 80, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 4px 30px rgba(0, 0, 0, 0.4),
+    0 0 1px rgba(0, 180, 255, 0.15),
+    inset 0 0 40px rgba(0, 0, 0, 0.2);
+  isolation: isolate;
+}
+
+.synth-cell {
+  transition: background 75ms, box-shadow 75ms, border-color 75ms, transform 60ms;
+}
+.synth-cell:hover {
+  filter: brightness(1.3);
+  transform: scale(1.06);
+}
+.synth-cell:active {
+  transform: scale(0.95);
+}
+
+.led-display {
+  background: #020408;
+  border: 1px solid #0a1525;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 1px 4px rgba(0, 0, 0, 0.8),
+    0 0 6px rgba(0, 255, 140, 0.06);
+}
+
+.led-input {
+  color: #00ffa0;
+  text-shadow: 0 0 8px #00ffa088, 0 0 20px #00ffa044;
+}
+
+.synth-btn-play {
+  background: linear-gradient(180deg, #ff3d8a 0%, #cc1860 100%);
+  color: #fff;
+  border: 1px solid #ff5a9e;
+  box-shadow:
+    0 0 12px rgba(255, 45, 120, 0.5),
+    0 0 24px rgba(255, 45, 120, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  text-shadow: 0 0 6px rgba(255, 45, 120, 0.6);
+  transition: box-shadow 0.15s, background 0.15s, transform 0.1s;
+  will-change: transform, box-shadow;
+  transform: translateZ(0);
+}
+.synth-btn-play:hover {
+  background: linear-gradient(180deg, #ff5a9e 0%, #ff2d78 100%);
+  box-shadow:
+    0 0 18px rgba(255, 45, 120, 0.65),
+    0 0 36px rgba(255, 45, 120, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: scale(1.03);
+}
+
+.synth-btn-stop {
+  background: linear-gradient(180deg, #ff4569 0%, #cc1030 100%);
+  color: #fff;
+  border: 1px solid #ff6b8a;
+  box-shadow:
+    0 0 12px rgba(255, 23, 68, 0.5),
+    0 0 24px rgba(255, 23, 68, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  text-shadow: 0 0 6px rgba(255, 23, 68, 0.6);
+  transition: box-shadow 0.15s, background 0.15s, transform 0.1s;
+  will-change: transform, box-shadow;
+  transform: translateZ(0);
+}
+.synth-btn-stop:hover {
+  background: linear-gradient(180deg, #ff6b8a 0%, #ff1744 100%);
+  box-shadow:
+    0 0 18px rgba(255, 23, 68, 0.65),
+    0 0 36px rgba(255, 23, 68, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: scale(1.03);
+}
+
+.synth-btn-chrome {
+  background: linear-gradient(180deg, #181e40 0%, #0e1228 100%);
+  color: #7a8ab8;
+  border: 1px solid #2a3a6a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.synth-btn-chrome:hover {
+  color: #00d4ff;
+  border-color: #00d4ff44;
+  box-shadow:
+    0 0 8px rgba(0, 212, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  text-shadow: 0 0 6px rgba(0, 212, 255, 0.4);
+  transform: scale(1.03);
+}
+
+.synth-toggle-on {
+  color: #00d4ff;
+  border-color: #00d4ff55;
+  box-shadow:
+    0 0 8px rgba(0, 212, 255, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  text-shadow: 0 0 6px rgba(0, 212, 255, 0.4);
+}
+
+/* ── Synth Knob / Range Slider ─────────────────────────────────── */
+
+.synth-knob {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 14px;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+}
+
+.synth-knob::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  border: 1px solid #1a2050;
+  background: linear-gradient(
+    to right,
+    #00a880 0%,
+    #00a880 calc(var(--val, 0) * 1%),
+    #0a0e20 calc(var(--val, 0) * 1%),
+    #0a0e20 100%
+  );
+}
+
+.synth-knob::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #00ffd5, #00a880 70%);
+  border: 2px solid #00ffa0;
+  box-shadow: 0 0 8px rgba(0, 255, 160, 0.5), 0 0 16px rgba(0, 255, 160, 0.2);
+  cursor: pointer;
+  margin-top: -5px;
+}
+
+.synth-knob::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: #0a0e20;
+  border: 1px solid #1a2050;
+}
+
+.synth-knob::-moz-range-progress {
+  height: 6px;
+  border-radius: 3px 0 0 3px;
+  background: #00a880;
+  border: 1px solid #00a88044;
+}
+
+.synth-knob::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #00ffd5, #00a880 70%);
+  border: 2px solid #00ffa0;
+  box-shadow: 0 0 8px rgba(0, 255, 160, 0.5), 0 0 16px rgba(0, 255, 160, 0.2);
+  cursor: pointer;
+}
+
+/* ── Synthwave Waveforms (below sequencer) ────────────────────── */
+
+.waveform-container {
+  position: relative;
+  overflow: visible;
+  min-height: 180px;
+  pointer-events: none;
+}
+
+.wave-layer {
+  position: absolute;
+  left: -5%;
+  right: -5%;
+  height: 50px;
+  transform-origin: center;
+  transition: opacity 0.12s ease-out, transform 0.12s ease-out;
+}
+
+.wave-svg {
+  position: absolute;
+  left: 0;
+  width: 200%;
+  height: 100%;
+  animation: wave-drift linear infinite;
+  transition: filter 0.12s ease-out;
+}
+
+.wave-reverse {
+  animation-direction: reverse;
+}
+
+@keyframes wave-drift {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* ── Effects Side Panel ───────────────────────────────────────── */
+
+.fx-panel {
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: width 0.3s ease, opacity 0.25s ease;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 200, 255, 0.015) 2px,
+      rgba(0, 200, 255, 0.015) 4px
+    ),
+    linear-gradient(180deg, rgba(6, 9, 32, 0.5) 0%, rgba(4, 7, 20, 0.5) 100%);
+  border-color: rgba(26, 32, 80, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 4px 30px rgba(0, 0, 0, 0.4),
+    inset 0 0 40px rgba(0, 0, 0, 0.2);
+}
+
+.fx-panel-open {
+  width: 240px;
+  opacity: 1;
+}
+
+/* ── VU Meter ─────────────────────────────────────────────────── */
+
+.vu-meter {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  mix-blend-mode: normal;
+  border: 1px solid #0a1525;
+  border-radius: 3px;
+  padding: 3px 4px;
+  background-color: #000;
+  background-image: none;
+}
+
+.vu-meter .vu-meter-seg {
+  background-color: #000;
+  box-shadow: none;
+}
