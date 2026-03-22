@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect, memo } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@/components/AuthProvider';
 import { useGrid } from '@/hooks/useGrid';
 import { usePlayback } from '@/hooks/usePlayback';
@@ -14,6 +14,8 @@ import CookieConsent from '@/components/CookieConsent';
 import svgPaths from '@/assets/svg-paths';
 import { encodeShareParam, decodeShareParam } from '@/lib/shareBeat';
 import { INSTRUMENTS, type InstrumentName } from '@/lib/audio-engine';
+import { PrivacyPolicyContent } from '@/pages/PrivacyPolicy';
+import { TermsOfServiceContent } from '@/pages/TermsOfService';
 
 // ─── Waveform Background ────────────────────────────────────────
 
@@ -142,6 +144,9 @@ export default function App() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [showWaveforms, setShowWaveforms] = useState(false);
   const [showEffectsPanel, setShowEffectsPanel] = useState(true);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   // ── BPM draft input — lets the user type freely; commits on blur/Enter ──
   const [bpmDraft, setBpmDraft] = useState(String(tempo));
@@ -319,6 +324,7 @@ export default function App() {
       if (e.key === 'Escape') {
         setShowSaveModal(false); setShowOpenModal(false);
         setAuthMode(null); setAuthError(null); setDeleteConfirmName(null);
+        setShowHelpModal(false); setShowPrivacyModal(false); setShowTermsModal(false);
         return;
       }
       if (e.code === 'Space' && !typing) {
@@ -328,6 +334,7 @@ export default function App() {
       }
       if (e.key === 'w' && !typing) setShowWaveforms((v) => !v);
       if (e.key === 'e' && !typing) setShowEffectsPanel((v) => !v);
+      if (e.key === '?' && !typing) setShowHelpModal((v) => !v);
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
@@ -383,6 +390,14 @@ export default function App() {
                 {/* ── Beat title bar — title left, action buttons right ── */}
                 <div className="flex items-center justify-between gap-[16px] px-4 md:px-[28px] py-[11px] border-b border-[#1a2050] bg-[rgba(3,5,18,0.5)]">
                   <div className="flex items-center gap-[12px] min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowHelpModal(true)}
+                      title="Help (?)"
+                      className="synth-btn-chrome flex items-center justify-center px-[9px] py-[7px] shrink-0 rounded-[4px] cursor-pointer font-['Press_Start_2P',cursive] text-[9px] text-[#8aa0d4] leading-none"
+                    >
+                      ?
+                    </button>
                     <span className="beat-title-gem shrink-0">◆</span>
                     <h1 className={`font-['Press_Start_2P',cursive] text-[13px] tracking-[0.18em] uppercase truncate ${currentBeatName ? 'beat-title-active' : 'beat-title-untitled'}`}>
                       {currentBeatName ?? 'untitled'}
@@ -606,8 +621,8 @@ export default function App() {
       <footer className="fixed bottom-0 left-0 right-0 z-20 border-t border-[#2a3a6a] retro-panel px-4 md:px-[40px] py-[16px]">
         <div className="flex flex-wrap items-center justify-center gap-x-[24px] gap-y-[8px] font-['Press_Start_2P',cursive] text-[7px] text-[#7a8ab8]">
           <span>&copy; {new Date().getFullYear()} Beatz-maker</span>
-          <Link to="/privacy" className="hover:text-[#ff2d78] transition-colors">Privacy Policy</Link>
-          <Link to="/terms" className="hover:text-[#ff2d78] transition-colors">Terms of Service</Link>
+          <button type="button" onClick={() => setShowPrivacyModal(true)} className="hover:text-[#ff2d78] transition-colors cursor-pointer">Privacy Policy</button>
+          <button type="button" onClick={() => setShowTermsModal(true)} className="hover:text-[#ff2d78] transition-colors cursor-pointer">Terms of Service</button>
         </div>
       </footer>
 
@@ -670,6 +685,108 @@ export default function App() {
       {/* Auth Modal */}
       {authMode && (
         <AuthModal mode={authMode} onClose={() => { setAuthMode(null); setAuthError(null); }} onSubmit={handleAuthSubmit} error={authError} />
+      )}
+
+      {/* Help Modal */}
+      {showHelpModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="help-modal-title" onClick={() => setShowHelpModal(false)}>
+          <div className="retro-panel border-2 border-[#2a3a6a] rounded-[12px] p-[24px] w-[calc(100vw-32px)] max-w-[560px] max-h-[80vh] overflow-y-auto neon-border-pink flex flex-col gap-[24px]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 id="help-modal-title" className="font-['Press_Start_2P',cursive] text-[11px] text-[#e0e8f8]">HELP</h2>
+              <button type="button" onClick={() => setShowHelpModal(false)} className="text-[#7a8ab8] hover:text-[#e0e8f8] transition-colors text-[16px] cursor-pointer leading-none">✕</button>
+            </div>
+
+            <div className="flex flex-col gap-[20px] font-['Press_Start_2P',cursive] text-[8px] text-[#8a9ac8] leading-[2]">
+
+              <div>
+                <h3 className="text-[9px] text-[#00ffa0] mb-[10px] tracking-[0.1em]">WHAT IS BEATZ-MAKER?</h3>
+                <p>A browser-based drum machine. Program 8 instruments across a 16-step grid, shape your sound with a full effects chain, and save or share your beats — no install needed.</p>
+              </div>
+
+              <div className="border-t border-[#1a2050]" />
+
+              <div>
+                <h3 className="text-[9px] text-[#00ffa0] mb-[10px] tracking-[0.1em]">MAKING BEATS</h3>
+                <ul className="space-y-[8px]">
+                  <li><span className="text-[#e0e8f8]">Click</span> any square to toggle it on or off.</li>
+                  <li><span className="text-[#e0e8f8]">Click &amp; drag</span> across empty squares to fill them. Start on a filled square to erase instead.</li>
+                  <li><span className="text-[#e0e8f8]">Click a track label</span> (e.g. KICK) to preview that sound.</li>
+                  <li>Adjust <span className="text-[#e0e8f8]">BPM</span> then press Enter or click away to apply.</li>
+                </ul>
+              </div>
+
+              <div className="border-t border-[#1a2050]" />
+
+              <div>
+                <h3 className="text-[9px] text-[#00ffa0] mb-[10px] tracking-[0.1em]">EFFECTS</h3>
+                <p>Toggle the <span className="text-[#e0e8f8]">EFFECTS</span> panel to reveal sliders for Reverb, Delay, Dry/Wet, Chorus, Compression, Filter Cutoff &amp; Resonance, and Swing. Hit <span className="text-[#e0e8f8]">RESET DEFAULTS</span> to clear them.</p>
+              </div>
+
+              <div className="border-t border-[#1a2050]" />
+
+              <div>
+                <h3 className="text-[9px] text-[#00ffa0] mb-[10px] tracking-[0.1em]">SAVING &amp; LOADING</h3>
+                <p>Sign in to save beats to the cloud and access them from any device. Guests can still save up to the limit of their browser's localStorage.</p>
+              </div>
+
+              <div className="border-t border-[#1a2050]" />
+
+              <div>
+                <h3 className="text-[9px] text-[#00ffa0] mb-[10px] tracking-[0.1em]">SHARING</h3>
+                <p>Hit <span className="text-[#e0e8f8]">Share Your Beat</span> to copy a link. The entire beat — grid, BPM, and all effects — is encoded in the URL. Anyone with the link can open it instantly.</p>
+              </div>
+
+              <div className="border-t border-[#1a2050]" />
+
+              <div>
+                <h3 className="text-[9px] text-[#00ffa0] mb-[10px] tracking-[0.1em]">KEYBOARD SHORTCUTS</h3>
+                <div className="grid grid-cols-[auto_1fr] gap-x-[16px] gap-y-[8px]">
+                  {([
+                    ['Space',    'Play / Stop'],
+                    ['E',        'Toggle Effects panel'],
+                    ['W',        'Toggle Waveforms'],
+                    ['?',        'Open this help screen'],
+                    ['Ctrl+Z',   'Undo'],
+                    ['Ctrl+⇧Z',  'Redo'],
+                    ['Escape',   'Close any open modal'],
+                  ] as const).map(([key, desc]) => (
+                    <>
+                      <span key={key} className="text-[#e0e8f8] whitespace-nowrap">{key}</span>
+                      <span key={desc} className="text-[#8a9ac8]">{desc}</span>
+                    </>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Privacy Policy Modal */}
+      {showPrivacyModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="privacy-modal-title" onClick={() => setShowPrivacyModal(false)}>
+          <div className="retro-panel border-2 border-[#2a3a6a] rounded-[12px] p-[24px] w-[calc(100vw-32px)] max-w-[600px] max-h-[80vh] overflow-y-auto neon-border-pink flex flex-col gap-[20px]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 id="privacy-modal-title" className="font-['Press_Start_2P',cursive] text-[11px] text-[#e0e8f8]">PRIVACY POLICY</h2>
+              <button type="button" onClick={() => setShowPrivacyModal(false)} className="text-[#7a8ab8] hover:text-[#e0e8f8] transition-colors text-[16px] cursor-pointer leading-none">✕</button>
+            </div>
+            <PrivacyPolicyContent />
+          </div>
+        </div>
+      )}
+
+      {/* Terms of Service Modal */}
+      {showTermsModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="terms-modal-title" onClick={() => setShowTermsModal(false)}>
+          <div className="retro-panel border-2 border-[#2a3a6a] rounded-[12px] p-[24px] w-[calc(100vw-32px)] max-w-[600px] max-h-[80vh] overflow-y-auto neon-border-pink flex flex-col gap-[20px]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 id="terms-modal-title" className="font-['Press_Start_2P',cursive] text-[11px] text-[#e0e8f8]">TERMS OF SERVICE</h2>
+              <button type="button" onClick={() => setShowTermsModal(false)} className="text-[#7a8ab8] hover:text-[#e0e8f8] transition-colors text-[16px] cursor-pointer leading-none">✕</button>
+            </div>
+            <TermsOfServiceContent />
+          </div>
+        </div>
       )}
     </div>
   );
