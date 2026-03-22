@@ -22,7 +22,10 @@ Live: [beatz-maker.netlify.app](https://beatz-maker.netlify.app)
 - **Overwrite protection** — confirmation prompt before clobbering an existing beat
 - **Beat sharing** — "Share Your Beat" copies a URL-encoded link; effects, tempo, and grid are all encoded in the `?beat=` query param; a Netlify Edge Function serves rich Open Graph previews for bots/social cards
 - **User authentication** — email/password via Supabase Auth
-- **Keyboard shortcuts** — `Space` to play/stop, `w` to toggle waveforms, `e` to toggle effects panel, `Escape` to close modals
+- **Undo / Redo** — full grid history (up to 100 steps); drag-paint gestures are batched into a single undo step; `Ctrl/⌘+Z` / `Ctrl/⌘+Shift+Z`, also available as toolbar buttons beside Play
+- **Help modal** — `?` button in the Navbar (or press `?`) opens an in-app reference covering controls, effects, saving, sharing, and all keyboard shortcuts
+- **In-app Privacy & Terms modals** — footer links open styled modals instead of navigating away; standalone `/privacy` and `/terms` routes remain for direct URL access
+- **Keyboard shortcuts** — `Space` play/stop · `E` effects · `W` waveforms · `?` help · `Ctrl+Z/Y` undo/redo · `Escape` close modals
 - **Error boundary** — graceful crash screen with reload instead of a blank page
 - **Cookie consent banner**, **Privacy Policy** (`/privacy`), and **Terms of Service** (`/terms`)
 
