@@ -11,6 +11,7 @@ Live: [beatz-maker.netlify.app](https://beatz-maker.netlify.app)
 ## Features
 
 - **16-step sequencer** with 8 instruments — Kick, Snare, Open Hi-Hat, Closed Hi-Hat, Clap, Tom, Rimshot, Cowbell
+- **Click-and-drag painting** — hold and drag to fill empty cells; starting on a filled cell switches to erase mode, clearing only filled cells as you drag
 - **Web Audio API synthesis** — all sounds generated procedurally, no sample files
 - **Web Audio lookahead scheduling** — audio events scheduled with `AudioContext.currentTime` for drift-free timing at any BPM
 - **Adjustable tempo** (40–300 BPM)

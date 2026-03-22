@@ -23,15 +23,17 @@ export const INSTRUMENT_COLORS: Record<InstrumentName, InstrumentColors> = {
 
 // ─── Grid Cell ──────────────────────────────────────────────────
 
-// B1: GridCell receives instrument+step as stable props and a single stable
-// onToggleCell reference. This lets memo work — a cell only re-renders when
-// its own `active` or `isCurrentStep` value changes, not on every App update.
+// GridCell receives instrument+step as stable props and stable callback refs.
+// memo ensures a cell only re-renders when its own `active` or `isCurrentStep`
+// value changes, not on every App update or unrelated grid paint.
 const GridCell = memo(function GridCell({
   instrument,
   step,
   active,
   isCurrentStep,
   onToggleCell,
+  onDragStart,
+  onDragEnter,
   ariaLabel,
   colors,
 }: {
@@ -40,12 +42,18 @@ const GridCell = memo(function GridCell({
   active: boolean;
   isCurrentStep: boolean;
   onToggleCell: (instrument: InstrumentName, step: number) => void;
+  onDragStart: (instrument: InstrumentName, step: number, isActive: boolean) => void;
+  onDragEnter: (instrument: InstrumentName, step: number, isActive: boolean) => void;
   ariaLabel: string;
   colors: InstrumentColors;
 }) {
   const [flash, setFlash] = useState<false | 'click' | 'play'>(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevFiring = useRef(false);
+  // Tracks whether the current interaction was initiated by mouse so the
+  // subsequent click event (which always fires after mouseup) doesn't
+  // double-toggle. Keyboard-initiated clicks skip onMouseDown entirely.
+  const mouseDownHandledRef = useRef(false);
 
   const triggerFlash = useCallback((source: 'click' | 'play') => {
     setFlash(source);
@@ -53,10 +61,30 @@ const GridCell = memo(function GridCell({
     flashTimer.current = setTimeout(() => setFlash(false), source === 'click' ? 150 : 180);
   }, []);
 
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return; // left button only
+    e.preventDefault(); // prevent focus ring on drag
+    mouseDownHandledRef.current = true;
+    // Toggle this cell immediately and inform the grid of the drag mode.
+    // `active` is the value BEFORE the toggle — that's what determines fill vs. erase.
+    onToggleCell(instrument, step);
+    triggerFlash('click');
+    onDragStart(instrument, step, active);
+  }, [onToggleCell, instrument, step, triggerFlash, onDragStart, active]);
+
+  // Keyboard activation fires click without mousedown — handle it here.
   const handleClick = useCallback(() => {
+    if (mouseDownHandledRef.current) {
+      mouseDownHandledRef.current = false;
+      return; // already handled by mousedown
+    }
     onToggleCell(instrument, step);
     triggerFlash('click');
   }, [onToggleCell, instrument, step, triggerFlash]);
+
+  const handleMouseEnter = useCallback(() => {
+    onDragEnter(instrument, step, active);
+  }, [onDragEnter, instrument, step, active]);
 
   const isFiring = isCurrentStep && active;
   useEffect(() => {
@@ -91,7 +119,9 @@ const GridCell = memo(function GridCell({
   return (
     <button
       type="button"
+      onMouseDown={handleMouseDown}
       onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
       aria-label={ariaLabel}
       aria-pressed={active}
       style={{
@@ -128,6 +158,30 @@ interface SequencerGridProps {
 const SequencerGrid: FC<SequencerGridProps> = memo(function SequencerGrid({ grid, currentStep, onToggleCell }) {
   const [flashInst, setFlashInst] = useState<InstrumentName | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Drag-to-paint ───────────────────────────────────────────────
+  // 'fill'  — started on an empty cell; drag fills empty cells
+  // 'erase' — started on a filled cell; drag clears filled cells
+  // null    — no drag in progress
+  const dragModeRef = useRef<'fill' | 'erase' | null>(null);
+
+  const handleDragStart = useCallback((inst: InstrumentName, _step: number, isActive: boolean) => {
+    dragModeRef.current = isActive ? 'erase' : 'fill';
+  }, []);
+
+  const handleDragEnter = useCallback((inst: InstrumentName, step: number, isActive: boolean) => {
+    const mode = dragModeRef.current;
+    if (!mode) return;
+    if (mode === 'fill' && !isActive) onToggleCell(inst, step);
+    else if (mode === 'erase' && isActive) onToggleCell(inst, step);
+  }, [onToggleCell]);
+
+  // Clear drag mode on mouseup anywhere in the window
+  useEffect(() => {
+    const stop = () => { dragModeRef.current = null; };
+    window.addEventListener('mouseup', stop);
+    return () => window.removeEventListener('mouseup', stop);
+  }, []);
 
   const handlePreview = useCallback(async (inst: InstrumentName) => {
     await initAudio();
@@ -214,6 +268,8 @@ const SequencerGrid: FC<SequencerGridProps> = memo(function SequencerGrid({ grid
                       active={grid[inst][step]}
                       isCurrentStep={currentStep === step}
                       onToggleCell={onToggleCell}
+                      onDragStart={handleDragStart}
+                      onDragEnter={handleDragEnter}
                       ariaLabel={`${INSTRUMENT_LABELS[inst]} step ${step + 1}${grid[inst][step] ? ', active' : ''}`}
                       colors={INSTRUMENT_COLORS[inst]}
                     />
