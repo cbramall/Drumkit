@@ -363,6 +363,7 @@ export default function App() {
         onSignUpClick={() => { setAuthError(null); setAuthMode('signup'); }}
         onSignInClick={() => { setAuthError(null); setAuthMode('signin'); }}
         onSignOut={signOut}
+        onHelpClick={() => setShowHelpModal(true)}
       />
 
       <main className="min-h-screen flex flex-col items-center justify-center px-2 md:px-[24px] pt-[60px] md:pt-[108px] pb-[60px] relative">
@@ -390,14 +391,6 @@ export default function App() {
                 {/* ── Beat title bar — title left, action buttons right ── */}
                 <div className="flex items-center justify-between gap-[16px] px-4 md:px-[28px] py-[11px] border-b border-[#1a2050] bg-[rgba(3,5,18,0.5)]">
                   <div className="flex items-center gap-[12px] min-w-0">
-                    <button
-                      type="button"
-                      onClick={() => setShowHelpModal(true)}
-                      title="Help (?)"
-                      className="synth-btn-chrome flex items-center justify-center px-[9px] py-[7px] shrink-0 rounded-[4px] cursor-pointer font-['Press_Start_2P',cursive] text-[9px] text-[#8aa0d4] leading-none"
-                    >
-                      ?
-                    </button>
                     <span className="beat-title-gem shrink-0">◆</span>
                     <h1 className={`font-['Press_Start_2P',cursive] text-[13px] tracking-[0.18em] uppercase truncate ${currentBeatName ? 'beat-title-active' : 'beat-title-untitled'}`}>
                       {currentBeatName ?? 'untitled'}
