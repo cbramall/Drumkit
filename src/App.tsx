@@ -122,7 +122,7 @@ export default function App() {
   const navigate = useNavigate();
 
   // ── Domain hooks ──────────────────────────────────────────────
-  const { grid, setGrid, toggleCell, resetGrid } = useGrid();
+  const { grid, setGrid, toggleCell, resetGrid, undo, redo, canUndo, canRedo } = useGrid();
   const gridRef = useRef(grid);
   gridRef.current = grid;
 
@@ -328,10 +328,18 @@ export default function App() {
       }
       if (e.key === 'w' && !typing) setShowWaveforms((v) => !v);
       if (e.key === 'e' && !typing) setShowEffectsPanel((v) => !v);
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [stopPlayback, startPlayback, isPlayingRef]);
+  }, [stopPlayback, startPlayback, isPlayingRef, undo, redo]);
 
   // ─────────────────────────────────────────────────────────────
 
@@ -436,6 +444,28 @@ export default function App() {
                         <p className="font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em] leading-none">SIGN IN TO SAVE</p>
                       </button>
                     )}
+                    <button
+                      onClick={undo}
+                      disabled={!canUndo}
+                      title="Undo (Ctrl+Z / ⌘Z)"
+                      className="synth-btn-chrome flex items-center justify-center px-[10px] py-[10px] shrink-0 rounded-[4px] transition-opacity disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <svg className="shrink-0 size-[14px]" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 8.5A5 5 0 1 1 5.5 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                        <polyline points="3,5 3,9 7,9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={redo}
+                      disabled={!canRedo}
+                      title="Redo (Ctrl+Shift+Z / ⌘⇧Z)"
+                      className="synth-btn-chrome flex items-center justify-center px-[10px] py-[10px] shrink-0 rounded-[4px] transition-opacity disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <svg className="shrink-0 size-[14px]" viewBox="0 0 16 16" fill="none">
+                        <path d="M13 8.5A5 5 0 1 0 10.5 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                        <polyline points="13,5 13,9 9,9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
                     <button
                       onClick={handleNewBeat}
                       className="synth-btn-chrome flex gap-[6px] items-center justify-center px-[12px] py-[10px] shrink-0 cursor-pointer rounded-[4px]"
