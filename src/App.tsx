@@ -1,16 +1,18 @@
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { Link } from 'react-router';
+import { useState, useRef, useCallback, useMemo, useEffect, memo } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@/components/AuthProvider';
 import { useGrid } from '@/hooks/useGrid';
 import { usePlayback } from '@/hooks/usePlayback';
 import { useSavedBeats } from '@/hooks/useSavedBeats';
-import { initAudio, getEffectsState, resetEffectsToDefaults, getAnalyser } from '@/lib/audio-engine';
+import { initAudio, getEffectsState, resetEffectsToDefaults, applyEffectsState, getAnalyser } from '@/lib/audio-engine';
 import Navbar from '@/components/Navbar';
 import SequencerGrid, { INSTRUMENT_COLORS } from '@/components/SequencerGrid';
-import EffectsPanel, { type EffectValues } from '@/components/EffectsPanel';
+import EffectsPanel from '@/components/EffectsPanel';
+import type { EffectValues } from '@/lib/types';
 import AuthModal, { type AuthMode } from '@/components/AuthModal';
 import CookieConsent from '@/components/CookieConsent';
 import svgPaths from '@/assets/svg-paths';
+import { encodeShareParam, decodeShareParam } from '@/lib/shareBeat';
 import { INSTRUMENTS, type InstrumentName } from '@/lib/audio-engine';
 
 // ─── Waveform Background ────────────────────────────────────────
@@ -47,9 +49,11 @@ const WAVE_DEFS = INSTRUMENTS.map((inst, i) => {
 
 // ─── VU Meter ────────────────────────────────────────────────────
 
-function VuMeter({ isPlaying }: { isPlaying: boolean }) {
+const VuMeter = memo(function VuMeter({ isPlaying }: { isPlaying: boolean }) {
   const barsRef = useRef<(HTMLDivElement | null)[]>([]);
-  const animRef = useRef<number>(0);
+  // D2: separate refs for each ID type — prevents calling the wrong cancel fn
+  const rafRef     = useRef<number>(0);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const analyser = getAnalyser();
@@ -78,13 +82,20 @@ function VuMeter({ isPlaying }: { isPlaying: boolean }) {
         }
       }
       // Throttle to ~10fps when silent to save CPU
-      animRef.current = avg > 1
-        ? requestAnimationFrame(update)
-        : window.setTimeout(() => { animRef.current = requestAnimationFrame(update); }, 100) as unknown as number;
+      if (avg > 1) {
+        rafRef.current = requestAnimationFrame(update);
+      } else {
+        timeoutRef.current = window.setTimeout(() => {
+          rafRef.current = requestAnimationFrame(update);
+        }, 100);
+      }
     };
 
     update();
-    return () => { cancelAnimationFrame(animRef.current); clearTimeout(animRef.current); };
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
+    };
   }, [isPlaying]);
 
   return (
@@ -94,7 +105,7 @@ function VuMeter({ isPlaying }: { isPlaying: boolean }) {
       ))}
     </div>
   );
-}
+});
 
 // ─── Modal shared styles ─────────────────────────────────────────
 
@@ -107,6 +118,8 @@ const btnCls =
 
 export default function App() {
   const { user, signIn, signUp, signOut } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // ── Domain hooks ──────────────────────────────────────────────
   const { grid, setGrid, toggleCell, resetGrid } = useGrid();
@@ -123,23 +136,42 @@ export default function App() {
   const [saveName, setSaveName] = useState('');
   const [overwriteConfirmName, setOverwriteConfirmName] = useState<string | null>(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState<string | null>(null);
+  const [currentBeatName, setCurrentBeatName] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [showWaveforms, setShowWaveforms] = useState(false);
   const [showEffectsPanel, setShowEffectsPanel] = useState(true);
 
+  // ── BPM draft input — lets the user type freely; commits on blur/Enter ──
+  const [bpmDraft, setBpmDraft] = useState(String(tempo));
+  // Keep draft in sync when tempo is changed externally (e.g. loading a beat)
+  const prevTempoRef = useRef(tempo);
+  if (prevTempoRef.current !== tempo) {
+    prevTempoRef.current = tempo;
+    setBpmDraft(String(tempo));
+  }
+  const commitBpm = useCallback(() => {
+    const n = parseInt(bpmDraft, 10);
+    const clamped = Number.isFinite(n) ? Math.max(40, Math.min(300, n)) : tempo;
+    setTempo(clamped);
+    setBpmDraft(String(clamped));
+  }, [bpmDraft, tempo]);
+
   // ── Effects state ─────────────────────────────────────────────
-  const fxDefaults = getEffectsState();
-  const [fxValues, setFxValues] = useState<EffectValues>({
-    reverb:      fxDefaults.reverb,
-    delay:       fxDefaults.delayAmount,
-    dryWet:      fxDefaults.dryWet,
-    chorus:      fxDefaults.chorus,
-    compression: fxDefaults.compression,
-    cutoff:      fxDefaults.filterCutoff,
-    resonance:   fxDefaults.filterResonance,
-    swing:       fxDefaults.swing,
+  // B3: lazy initialiser — getEffectsState() runs once, not on every render
+  const [fxValues, setFxValues] = useState<EffectValues>(() => {
+    const d = getEffectsState();
+    return {
+      reverb:      d.reverb,
+      delay:       d.delayAmount,
+      dryWet:      d.dryWet,
+      chorus:      d.chorus,
+      compression: d.compression,
+      cutoff:      d.filterCutoff,
+      resonance:   d.filterResonance,
+      swing:       d.swing,
+    };
   });
 
   // ── Feedback toast ────────────────────────────────────────────
@@ -149,8 +181,28 @@ export default function App() {
     setFeedback(msg);
     feedbackTimerRef.current = setTimeout(() => setFeedback(null), duration);
   }, []);
+  useEffect(() => () => { if (feedbackTimerRef.current !== null) clearTimeout(feedbackTimerRef.current); }, []);
 
   const savedBeatNames = useMemo(() => Object.keys(savedBeats), [savedBeats]);
+
+  // ── Load a shared beat from the ?beat= URL param ──────────────
+  // The SHARE button encodes the current beat into a URL-safe base64 param.
+  // On mount we decode it, apply it, and immediately strip the param so the
+  // URL stays clean and a refresh doesn't re-load the same data.
+  useEffect(() => {
+    const param = new URLSearchParams(location.search).get('beat');
+    if (!param) return;
+    const shared = decodeShareParam(param);
+    if (!shared) return;
+    setGrid(shared.grid);
+    setTempo(shared.tempo);
+    setFxValues(shared.effects);
+    swingRef.current = shared.effects.swing;
+    applyEffectsState(shared.effects);
+    // Strip ?beat= from the URL without a navigation/re-render
+    navigate('/', { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally runs once on mount only
 
   // ── Effects handlers ──────────────────────────────────────────
   const handleFxChange = useCallback((key: keyof EffectValues, value: number) => {
@@ -171,25 +223,36 @@ export default function App() {
   }, [swingRef]);
 
   // ── Playback ──────────────────────────────────────────────────
-  const handlePlayback = async () => {
+  const handlePlayback = useCallback(async () => {
     if (isPlaying) { stopPlayback(); }
     else { await initAudio(); startPlayback(); }
-  };
+  }, [isPlaying, stopPlayback, startPlayback]);
 
-  const handleNewBeat = () => {
+  const handleNewBeat = useCallback(() => {
     stopPlayback();
     resetGrid();
     setTempo(120);
-  };
+    setCurrentBeatName(null);
+  }, [stopPlayback, resetGrid]);
 
   // ── Save / Open ───────────────────────────────────────────────
-  const handleConfirmSave = async () => {
+
+  /** Overwrite the currently-loaded beat without opening a modal. */
+  const handleDirectSave = useCallback(async () => {
+    if (!currentBeatName) return;
+    const err = await saveBeat(currentBeatName, grid, tempo, fxValues, true);
+    if (err === null) showFeedback(`"${currentBeatName}" saved!`, 2000);
+    else if (err === 'save_failed') showFeedback('Failed to save beat. Please try again.');
+  }, [currentBeatName, grid, tempo, fxValues, saveBeat, showFeedback]);
+
+  const handleConfirmSave = useCallback(async () => {
     const isOverwrite = overwriteConfirmName === saveName.trim();
-    const err = await saveBeat(saveName, grid, tempo, isOverwrite);
+    const err = await saveBeat(saveName, grid, tempo, fxValues, isOverwrite);
     switch (err) {
       case null:
         setShowSaveModal(false);
         setOverwriteConfirmName(null);
+        setCurrentBeatName(saveName.trim());
         showFeedback('Beat saved!', 2000);
         break;
       case 'name_empty':     break; // no-op: button should be disabled
@@ -198,40 +261,60 @@ export default function App() {
       case 'name_exists':    setOverwriteConfirmName(saveName.trim()); break;
       case 'save_failed':    showFeedback('Failed to save beat. Please try again.'); break;
     }
-  };
+  }, [overwriteConfirmName, saveName, saveBeat, grid, tempo, fxValues, showFeedback]);
 
-  const handleLoadBeat = (name: string) => {
+  const handleLoadBeat = useCallback((name: string) => {
     const result = loadBeat(name);
     if (result) {
       stopPlayback();
       setGrid(result.grid);
       setTempo(result.tempo);
+      setCurrentBeatName(name);
+      if (result.effects && 'reverb' in result.effects) {
+        setFxValues(result.effects);
+        swingRef.current = result.effects.swing;
+        applyEffectsState(result.effects);
+      }
     }
     setShowOpenModal(false);
-  };
+  }, [loadBeat, stopPlayback, setGrid, swingRef]);
 
-  const handleDeleteBeat = async (name: string) => {
+  const handleShareBeat = useCallback(async () => {
+    const param = encodeShareParam(grid, tempo, fxValues);
+    const url = `${window.location.origin}/?beat=${param}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showFeedback('Link copied!', 2500);
+    } catch {
+      showFeedback(`Share: ${url}`, 8000);
+    }
+  }, [grid, tempo, fxValues, showFeedback]);
+
+  const handleDeleteBeat = useCallback(async (name: string) => {
     const err = await deleteBeat(name);
     if (err === 'delete_failed')     showFeedback('Failed to delete beat. Please try again.');
     if (err === 'delete_missing_id') showFeedback('Cannot delete beat — missing record ID. Please refresh and try again.');
     setDeleteConfirmName(null);
-  };
+  }, [deleteBeat, showFeedback]);
 
   // ── Auth ──────────────────────────────────────────────────────
-  const handleAuthSubmit = async (email: string, password: string) => {
+  const handleAuthSubmit = useCallback(async (email: string, password: string) => {
     setAuthError(null);
     const { error } = authMode === 'signup'
       ? await signUp(email, password)
       : await signIn(email, password);
     if (error) { setAuthError(error.message); return; }
     setAuthMode(null);
-  };
+  }, [authMode, signIn, signUp]);
 
   // ── Keyboard shortcuts ────────────────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      const typing = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      const typing =
+        (target.tagName === 'INPUT' && (target as HTMLInputElement).type !== 'range') ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable;
 
       if (e.key === 'Escape') {
         setShowSaveModal(false); setShowOpenModal(false);
@@ -243,6 +326,8 @@ export default function App() {
         if (isPlayingRef.current) stopPlayback();
         else initAudio().then(() => startPlayback());
       }
+      if (e.key === 'w' && !typing) setShowWaveforms((v) => !v);
+      if (e.key === 'e' && !typing) setShowEffectsPanel((v) => !v);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -265,40 +350,155 @@ export default function App() {
         onSignOut={signOut}
       />
 
-      <main className="min-h-screen flex flex-col items-center justify-center px-[24px] py-[24px] relative z-10">
-        {feedback && (
-          <div className={`mb-[16px] px-[16px] py-[10px] rounded-[8px] font-['Press_Start_2P',cursive] text-[8px] text-center ${
-            /failed|cannot|corrupt/i.test(feedback)
+      <main className="min-h-screen flex flex-col items-center justify-center px-2 md:px-[24px] pt-[60px] md:pt-[108px] pb-[60px] relative">
+        {/* D5: role+aria-live ensures screen readers announce saves/errors */}
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className={`fixed top-[80px] left-1/2 -translate-x-1/2 z-40 px-[20px] py-[12px] rounded-[8px] font-['Press_Start_2P',cursive] text-[8px] text-center max-w-[calc(100vw-32px)] pointer-events-none transition-opacity duration-200 ${
+            feedback ? 'opacity-100' : 'opacity-0'
+          } ${
+            feedback && /failed|cannot|corrupt/i.test(feedback)
               ? 'bg-[#ff1744]/20 text-[#ff4569] border border-[#ff1744]/40'
               : 'bg-[#00e676]/20 text-[#69f0ae] border border-[#00e676]/40'
-          }`}>
-            {feedback}
-          </div>
-        )}
+          }`}
+        >
+          {feedback ?? ''}
+        </div>
 
-        <div className="flex items-stretch gap-0">
-          <div className="w-fit shrink-0">
+        <div className="flex flex-col md:flex-row md:items-stretch gap-0">
+          <div className="w-full min-w-0 md:w-fit md:shrink-0">
             {/* ── Toolbar ── */}
             <div className="synth-toolbar relative rounded-tl-[4px] rounded-tr-[4px] shrink-0 border-2 border-[#1a2050]">
               <div className="overflow-clip rounded-[inherit]">
-                <div className="content-stretch flex items-center justify-between px-[28px] py-[14px] relative w-full flex-wrap gap-[16px]">
-                  <div className="content-stretch flex gap-[20px] items-center relative shrink-0 flex-wrap">
+                {/* ── Beat title bar — title left, action buttons right ── */}
+                <div className="flex items-center justify-between gap-[16px] px-4 md:px-[28px] py-[11px] border-b border-[#1a2050] bg-[rgba(3,5,18,0.5)]">
+                  <div className="flex items-center gap-[12px] min-w-0">
+                    <span className="beat-title-gem shrink-0">◆</span>
+                    <h1 className={`font-['Press_Start_2P',cursive] text-[13px] tracking-[0.18em] uppercase truncate ${currentBeatName ? 'beat-title-active' : 'beat-title-untitled'}`}>
+                      {currentBeatName ?? 'untitled'}
+                    </h1>
+                  </div>
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-[6px] shrink-0 flex-wrap justify-end">
+                    {/* Save / Open / New group */}
+                    {user ? (
+                      <>
+                        <button
+                          onClick={currentBeatName
+                            ? handleDirectSave
+                            : () => { setShowSaveModal(true); setSaveName(''); setOverwriteConfirmName(null); }}
+                          className="synth-btn-chrome flex gap-[6px] items-center justify-center px-[12px] py-[10px] shrink-0 cursor-pointer rounded-[4px]"
+                          title={currentBeatName ? `Save "${currentBeatName}"` : 'Save beat'}
+                        >
+                          <svg className="shrink-0 size-[14px]" viewBox="0 0 16 16" fill="none">
+                            <rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+                            <rect x="5" y="2" width="6" height="4.5" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+                            <rect x="4.5" y="8.5" width="7" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+                            <line x1="7" y1="3" x2="7" y2="6.5" stroke="currentColor" strokeWidth="1.1" />
+                          </svg>
+                          <p className="font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em] leading-none">SAVE</p>
+                        </button>
+                        {currentBeatName && (
+                          <button
+                            onClick={() => { setShowSaveModal(true); setSaveName(currentBeatName); setOverwriteConfirmName(null); }}
+                            className="synth-btn-chrome flex gap-[6px] items-center justify-center px-[12px] py-[10px] shrink-0 cursor-pointer rounded-[4px]"
+                            title="Save as a new beat"
+                          >
+                            <svg className="shrink-0 size-[14px]" viewBox="0 0 16 16" fill="none">
+                              <rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+                              <rect x="5" y="2" width="6" height="4.5" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+                              <rect x="4.5" y="8.5" width="7" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.2" />
+                              <line x1="7" y1="3" x2="7" y2="6.5" stroke="currentColor" strokeWidth="1.1" />
+                            </svg>
+                            <p className="font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em] leading-none">SAVE AS</p>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { setShowOpenModal(true); setDeleteConfirmName(null); }}
+                          className="synth-btn-chrome flex gap-[6px] items-center justify-center px-[12px] py-[10px] shrink-0 cursor-pointer rounded-[4px]"
+                        >
+                          <svg className="shrink-0 size-[14px]" fill="none" viewBox="0 0 18.4272 15.25"><path d={svgPaths.p14df6180} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg>
+                          <p className="font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em] leading-none">OPEN</p>
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setAuthMode('signin')}
+                        className="synth-btn-chrome flex gap-[6px] items-center justify-center px-[12px] py-[10px] shrink-0 cursor-pointer rounded-[4px] opacity-60 hover:opacity-100"
+                        title="Sign in to save and open beats"
+                      >
+                        <svg className="shrink-0 size-[14px]" viewBox="0 0 16 16" fill="none">
+                          <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+                          <path d="M5 7V5a3 3 0 0 1 6 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                        </svg>
+                        <p className="font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em] leading-none">SIGN IN TO SAVE</p>
+                      </button>
+                    )}
+                    <button
+                      onClick={handleNewBeat}
+                      className="synth-btn-chrome flex gap-[6px] items-center justify-center px-[12px] py-[10px] shrink-0 cursor-pointer rounded-[4px]"
+                    >
+                      <svg className="shrink-0 size-[14px]" viewBox="0 0 16 16" fill="none">
+                        <line x1="8" y1="3" x2="8" y2="13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                        <line x1="3" y1="8" x2="13" y2="8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                      </svg>
+                      <p className="font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em] leading-none">NEW</p>
+                    </button>
+
+                    {/* Divider + SHARE BEAT! CTA */}
+                    {user && (
+                      <>
+                        <div className="w-px h-[20px] bg-[#2a3a6a] mx-[4px] shrink-0" aria-hidden="true" />
+                        <button
+                          type="button"
+                          onClick={handleShareBeat}
+                          title="Copy a shareable link to this beat"
+                          className="synth-btn-yellow flex gap-[6px] items-center justify-center px-[12px] py-[10px] shrink-0 cursor-pointer rounded-[4px]"
+                        >
+                          <svg className="shrink-0 size-[14px]" viewBox="0 0 16 16" fill="none">
+                            <circle cx="12" cy="3"  r="2" stroke="currentColor" strokeWidth="1.3" />
+                            <circle cx="12" cy="13" r="2" stroke="currentColor" strokeWidth="1.3" />
+                            <circle cx="3"  cy="8"  r="2" stroke="currentColor" strokeWidth="1.3" />
+                            <line x1="4.8"  y1="7.1"  x2="10.2" y2="4.1"  stroke="currentColor" strokeWidth="1.3" />
+                            <line x1="4.8"  y1="8.9"  x2="10.2" y2="11.9" stroke="currentColor" strokeWidth="1.3" />
+                          </svg>
+                          <p className="font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em] leading-none">Share Your Beat</p>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Playback row ── */}
+                <div className="flex items-center justify-between px-4 md:px-[28px] py-[14px] w-full flex-wrap gap-[16px]">
+                  {/* Left: transport controls */}
+                  <div className="flex gap-[20px] items-center shrink-0 flex-wrap">
                     <VuMeter isPlaying={isPlaying} />
-                    <div className="content-stretch flex gap-[10px] items-center relative shrink-0">
-                      <p className="font-['Press_Start_2P',cursive] text-[#8aa0d4] text-[8px] tracking-[0.1em]">BPM</p>
-                      <div className="led-display flex items-center justify-center relative shrink-0">
+                    <div className="flex gap-[10px] items-center shrink-0">
+                      <label htmlFor="bpm-input" className="font-['Press_Start_2P',cursive] text-[#8aa0d4] text-[8px] tracking-[0.1em]">BPM</label>
+                      <div className="led-display flex items-center justify-center shrink-0">
                         <input
-                          type="number" min={40} max={300} value={tempo}
-                          onChange={(e) => setTempo(Math.max(40, Math.min(300, Number(e.target.value) || 120)))}
+                          id="bpm-input"
+                          type="number" min={40} max={300}
+                          value={bpmDraft}
+                          aria-label="Tempo in BPM"
+                          onChange={(e) => setBpmDraft(e.target.value)}
+                          onBlur={commitBpm}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); } }}
                           className="led-input bg-transparent text-[14px] font-['Press_Start_2P',cursive] w-[80px] text-center outline-none px-[12px] py-[8px] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                       </div>
                     </div>
                     <button
+                      type="button"
                       onClick={handlePlayback}
-                      className={`${isPlaying ? 'synth-btn-stop' : 'synth-btn-play'} content-stretch flex gap-[6px] items-center justify-center px-[14px] py-[8px] relative rounded-[4px] shrink-0 cursor-pointer`}
+                      aria-label={isPlaying ? 'Stop playback' : 'Start playback'}
+                      aria-pressed={isPlaying}
+                      className={`${isPlaying ? 'synth-btn-stop' : 'synth-btn-play'} flex gap-[6px] items-center justify-center px-[14px] py-[8px] rounded-[4px] shrink-0 cursor-pointer`}
                     >
-                      <div className="relative shrink-0 size-[16px]">
+                      <div className="shrink-0 size-[16px]">
                         {isPlaying ? (
                           <svg className="block size-full" viewBox="0 0 16 16">
                             <rect x="2" y="2" width="4.5" height="12" rx="1" fill="currentColor" />
@@ -314,33 +514,31 @@ export default function App() {
                     </button>
                   </div>
 
-                  <div className="content-stretch flex gap-[8px] items-center relative shrink-0 flex-wrap">
-                    <button onClick={() => setShowEffectsPanel((v) => !v)} className={`synth-btn-chrome content-stretch flex gap-[6px] items-center justify-center px-[12px] py-[8px] relative shrink-0 cursor-pointer rounded-[4px] ${showEffectsPanel ? 'synth-toggle-on' : ''}`}>
-                      <svg className="shrink-0 size-[14px]" viewBox="0 0 16 16" fill="none">
-                        <circle cx="4" cy="5" r="2" stroke="currentColor" strokeWidth="1.2" fill="none" />
-                        <line x1="4" y1="7" x2="4" y2="15" stroke="currentColor" strokeWidth="1.2" />
-                        <circle cx="12" cy="11" r="2" stroke="currentColor" strokeWidth="1.2" fill="none" />
-                        <line x1="12" y1="1" x2="12" y2="9" stroke="currentColor" strokeWidth="1.2" />
-                      </svg>
-                      <p className="font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em]">FX</p>
+                  {/* Right: view toggles as switches */}
+                  <div className="flex items-center gap-[20px] shrink-0">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={showWaveforms}
+                      onClick={() => setShowWaveforms((v) => !v)}
+                      className="synth-switch"
+                    >
+                      <div className={`synth-switch-track ${showWaveforms ? 'synth-switch-track--on' : ''}`}>
+                        <div className={`synth-switch-thumb ${showWaveforms ? 'synth-switch-thumb--on' : ''}`} />
+                      </div>
+                      <p className={`font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em] leading-none ${showWaveforms ? 'text-[#00d4ff]' : ''}`}>WAVES</p>
                     </button>
-                    <button onClick={() => setShowWaveforms((v) => !v)} className={`synth-btn-chrome content-stretch flex gap-[6px] items-center justify-center px-[12px] py-[8px] relative shrink-0 cursor-pointer rounded-[4px] ${showWaveforms ? 'synth-toggle-on' : ''}`}>
-                      <svg className="shrink-0 size-[14px]" viewBox="0 0 16 16" fill="none">
-                        <path d="M1 8 Q3 3, 5 8 T9 8 T13 8 T16 8" stroke="currentColor" strokeWidth="1.5" fill="none" />
-                      </svg>
-                      <p className="font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em]">WAVES</p>
-                    </button>
-                    <button onClick={() => { setShowSaveModal(true); setSaveName(''); setOverwriteConfirmName(null); }} className="synth-btn-chrome content-stretch flex gap-[6px] items-center justify-center px-[12px] py-[8px] relative shrink-0 cursor-pointer rounded-[4px]">
-                      <svg className="shrink-0 size-[14px]" fill="none" viewBox="0 0 17.75 14"><path d={svgPaths.pb0ea00} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg>
-                      <p className="font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em]">SAVE</p>
-                    </button>
-                    <button onClick={() => { setShowOpenModal(true); setDeleteConfirmName(null); }} className="synth-btn-chrome content-stretch flex gap-[6px] items-center justify-center px-[12px] py-[8px] relative shrink-0 cursor-pointer rounded-[4px]">
-                      <svg className="shrink-0 size-[14px]" fill="none" viewBox="0 0 18.4272 15.25"><path d={svgPaths.p14df6180} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg>
-                      <p className="font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em]">OPEN</p>
-                    </button>
-                    <button onClick={handleNewBeat} className="synth-btn-chrome content-stretch flex gap-[6px] items-center justify-center px-[12px] py-[8px] relative shrink-0 cursor-pointer rounded-[4px]">
-                      <svg className="shrink-0 size-[14px]" fill="none" viewBox="0 0 15.25 17.75"><path d={svgPaths.p2543cf1} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg>
-                      <p className="font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em]">NEW</p>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={showEffectsPanel}
+                      onClick={() => setShowEffectsPanel((v) => !v)}
+                      className="synth-switch"
+                    >
+                      <div className={`synth-switch-track ${showEffectsPanel ? 'synth-switch-track--on' : ''}`}>
+                        <div className={`synth-switch-thumb ${showEffectsPanel ? 'synth-switch-thumb--on' : ''}`} />
+                      </div>
+                      <p className={`font-['Press_Start_2P',cursive] text-[7px] tracking-[0.05em] leading-none ${showEffectsPanel ? 'text-[#00d4ff]' : ''}`}>EFFECTS</p>
                     </button>
                   </div>
                 </div>
@@ -350,11 +548,11 @@ export default function App() {
             <SequencerGrid grid={grid} currentStep={currentStep} onToggleCell={toggleCell} />
           </div>
 
-          <EffectsPanel open={showEffectsPanel} values={fxValues} swingRef={swingRef} onChange={handleFxChange} onReset={handleResetEffects} />
+          <EffectsPanel open={showEffectsPanel} values={fxValues} onChange={handleFxChange} onReset={handleResetEffects} />
         </div>
 
-        {/* Waveforms */}
-        <div className={`waveform-container mt-[24px] w-screen -mx-[24px] transition-opacity duration-300 ${showWaveforms ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} aria-hidden="true">
+        {/* Waveforms — hidden on mobile for performance */}
+        <div className={`waveform-container hidden md:block mt-[24px] w-screen -mx-[24px] transition-opacity duration-300 ${showWaveforms ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} aria-hidden="true">
           {WAVE_DEFS.map(({ inst, color, path, idleSpeed, playSpeed, sw, reverse }) => {
             const firing = isPlaying && currentStep >= 0 && grid[inst][currentStep];
             return (
@@ -370,8 +568,8 @@ export default function App() {
         </div>
       </main>
 
-      <footer className="fixed bottom-0 left-0 right-0 z-20 border-t border-[#2a3a6a] retro-panel px-[40px] py-[16px]">
-        <div className="flex items-center justify-center gap-[24px] font-['Press_Start_2P',cursive] text-[7px] text-[#7a8ab8]">
+      <footer className="fixed bottom-0 left-0 right-0 z-20 border-t border-[#2a3a6a] retro-panel px-4 md:px-[40px] py-[16px]">
+        <div className="flex flex-wrap items-center justify-center gap-x-[24px] gap-y-[8px] font-['Press_Start_2P',cursive] text-[7px] text-[#7a8ab8]">
           <span>&copy; {new Date().getFullYear()} Beatz-maker</span>
           <Link to="/privacy" className="hover:text-[#ff2d78] transition-colors">Privacy Policy</Link>
           <Link to="/terms" className="hover:text-[#ff2d78] transition-colors">Terms of Service</Link>
@@ -382,9 +580,9 @@ export default function App() {
 
       {/* Save Modal */}
       {showSaveModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={() => setShowSaveModal(false)}>
-          <div className="retro-panel border-2 border-[#2a3a6a] rounded-[12px] p-[24px] w-[400px] neon-border-pink" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-['Press_Start_2P',cursive] text-[11px] text-[#e0e8f8] mb-[16px]">SAVE BEAT</h2>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="save-modal-title" onClick={() => setShowSaveModal(false)}>
+          <div className="retro-panel border-2 border-[#2a3a6a] rounded-[12px] p-[24px] w-[calc(100vw-32px)] max-w-[400px] neon-border-pink" onClick={(e) => e.stopPropagation()}>
+            <h2 id="save-modal-title" className="font-['Press_Start_2P',cursive] text-[11px] text-[#e0e8f8] mb-[16px]">SAVE BEAT</h2>
             <input type="text" placeholder="Enter beat name..." value={saveName} onChange={(e) => { setSaveName(e.target.value); setOverwriteConfirmName(null); }} onKeyDown={(e) => e.key === 'Enter' && handleConfirmSave()} maxLength={100} autoFocus className={inputCls} />
             {overwriteConfirmName && (
               <p className="mt-[12px] text-[#ffd740] text-[7px] font-['Press_Start_2P',cursive] leading-[1.6]">
@@ -403,9 +601,9 @@ export default function App() {
 
       {/* Open Modal */}
       {showOpenModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={() => setShowOpenModal(false)}>
-          <div className="retro-panel border-2 border-[#2a3a6a] rounded-[12px] p-[24px] w-[400px] max-h-[500px] overflow-y-auto neon-border-pink" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-['Press_Start_2P',cursive] text-[11px] text-[#e0e8f8] mb-[16px]">OPEN BEAT</h2>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="open-modal-title" onClick={() => setShowOpenModal(false)}>
+          <div className="retro-panel border-2 border-[#2a3a6a] rounded-[12px] p-[24px] w-[calc(100vw-32px)] max-w-[400px] max-h-[500px] overflow-y-auto neon-border-pink" onClick={(e) => e.stopPropagation()}>
+            <h2 id="open-modal-title" className="font-['Press_Start_2P',cursive] text-[11px] text-[#e0e8f8] mb-[16px]">OPEN BEAT</h2>
             {beatsLoading ? (
               <p className="text-[#7a8ab8] font-['Press_Start_2P',cursive] text-[8px]">Loading beats...</p>
             ) : savedBeatNames.length === 0 ? (

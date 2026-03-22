@@ -4,6 +4,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useMemo,
   type ReactNode,
 } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -25,10 +26,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
+    // A3: .catch() ensures loading is cleared even on network failure
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        setSession(session);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
@@ -51,7 +56,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   }, []);
 
-  const value: AuthContextValue = { session, user: session?.user ?? null, loading, signIn, signUp, signOut };
+  // B2: stable object reference — consumers only re-render when values actually change
+  const value = useMemo<AuthContextValue>(
+    () => ({ session, user: session?.user ?? null, loading, signIn, signUp, signOut }),
+    [session, loading, signIn, signUp, signOut],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

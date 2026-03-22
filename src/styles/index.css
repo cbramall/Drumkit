@@ -1,16 +1,44 @@
-@import './fonts.css';
 @import './tailwind.css';
+
+/* ── Grid cell dimensions (responsive via CSS custom properties) ── */
+:root {
+  --cell:            28px;
+  --cell-gap:         8px;
+  --cell-group-gap:  14px;
+  --track-w:         72px;
+  --row-h:           36px;
+  --header-h:        28px;
+  --grid-pad:        12px;
+  --row-gap:          4px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --cell:            40px;
+    --cell-gap:        16px;
+    --cell-group-gap:  24px;
+    --track-w:        140px;
+    --row-h:           56px;
+    --header-h:        40px;
+    --grid-pad:        24px;
+    --row-gap:          8px;
+  }
+}
 
 /* ── 80s Retro Chrome ──────────────────────────────────────────── */
 
 .retro-bg {
   background: transparent;
+  position: relative; /* establishes containing block so .retro-scene can be position:absolute */
 }
 
 /* ── Static Synthwave Scene ───────────────────────────────────── */
 
 .retro-scene {
-  position: fixed;
+  /* position:absolute keeps the scene in the same GPU compositing layer as the
+     backdrop-filter panels above it. position:fixed would promote it to its own
+     layer and Chrome cannot sample cross-layer backdrops (Safari can). */
+  position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 0;
@@ -152,6 +180,10 @@
   to   { background-position: 0 0, 0 30px, 0 0; }
 }
 
+@media (max-width: 767px) {
+  .retro-scene-floor { animation: none; }
+}
+
 .chrome-text {
   background: linear-gradient(
     180deg,
@@ -216,17 +248,6 @@
   box-shadow: 0 0 14px rgba(255, 45, 120, 0.55), 0 0 28px rgba(255, 45, 120, 0.25);
 }
 
-.retro-btn-stop {
-  background: linear-gradient(180deg, #ff4569 0%, #e01535 100%);
-  border-color: #ff6b8a;
-  box-shadow: 0 0 10px rgba(255, 23, 68, 0.4), 0 0 20px rgba(255, 23, 68, 0.15);
-  transition: box-shadow 0.2s, background 0.2s;
-}
-.retro-btn-stop:hover {
-  background: linear-gradient(180deg, #ff6b8a 0%, #ff1744 100%);
-  box-shadow: 0 0 14px rgba(255, 23, 68, 0.55), 0 0 28px rgba(255, 23, 68, 0.25);
-}
-
 /* ── Synth-Pop Sequencer ──────────────────────────────────────── */
 
 .synth-toolbar {
@@ -235,6 +256,42 @@
   box-shadow:
     0 0 12px rgba(0, 180, 255, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ── Beat Title Strip ─────────────────────────────────────────── */
+
+.beat-title-active {
+  color: #ff2d78;
+  text-shadow:
+    0 0 8px rgba(255, 45, 120, 0.5),
+    0 0 20px rgba(255, 45, 120, 0.2);
+  animation: beat-title-pulse 5s ease-in-out infinite;
+}
+
+.beat-title-untitled {
+  color: #1e2a52;
+  letter-spacing: 0.22em;
+}
+
+.beat-title-gem {
+  color: #ff2d78;
+  opacity: 0.4;
+  font-size: 8px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+@keyframes beat-title-pulse {
+  0%, 100% {
+    text-shadow:
+      0 0 8px rgba(255, 45, 120, 0.5),
+      0 0 20px rgba(255, 45, 120, 0.2);
+  }
+  50% {
+    text-shadow:
+      0 0 10px rgba(255, 45, 120, 0.65),
+      0 0 28px rgba(255, 45, 120, 0.28);
+  }
 }
 
 .synth-grid-panel {
@@ -344,6 +401,77 @@
   transform: scale(1.03);
 }
 
+.synth-btn-yellow {
+  background: linear-gradient(135deg, rgba(255, 234, 0, 0.14) 0%, rgba(255, 200, 0, 0.07) 100%);
+  color: #ffea00;
+  border: 1px solid rgba(255, 234, 0, 0.55);
+  box-shadow:
+    0 0 10px rgba(255, 234, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  text-shadow: 0 0 8px rgba(255, 234, 0, 0.55);
+  transition: color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.synth-btn-yellow:hover {
+  color: #fff176;
+  border-color: rgba(255, 234, 0, 0.9);
+  box-shadow:
+    0 0 18px rgba(255, 234, 0, 0.45),
+    0 0 36px rgba(255, 234, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  text-shadow: 0 0 12px rgba(255, 234, 0, 0.8);
+  transform: scale(1.04);
+}
+
+/* ── Toggle Switch ─────────────────────────────────────────────── */
+
+.synth-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #7a8ab8;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.synth-switch:hover {
+  color: #c0ceee;
+}
+
+.synth-switch-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #2a3a6a;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  flex-shrink: 0;
+}
+.synth-switch-track--on {
+  background: rgba(0, 212, 255, 0.12);
+  border-color: #00d4ff88;
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.2), inset 0 0 6px rgba(0, 212, 255, 0.08);
+}
+
+.synth-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #3a4a7a;
+  transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.synth-switch-thumb--on {
+  transform: translateX(16px);
+  background: #00d4ff;
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.7);
+}
+
 .synth-toggle-on {
   color: #00d4ff;
   border-color: #00d4ff55;
@@ -422,7 +550,7 @@
 
 .waveform-container {
   position: relative;
-  overflow: visible;
+  overflow: hidden;
   min-height: 180px;
   pointer-events: none;
 }
@@ -481,6 +609,21 @@
 .fx-panel-open {
   width: 240px;
   opacity: 1;
+}
+
+/* On mobile the effects panel stacks below the grid.
+   Switch to a max-height transition so "width: 100%" is always set and
+   the content (including h-full children) renders at natural height. */
+@media (max-width: 767px) {
+  .fx-panel {
+    width: 100% !important;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease, opacity 0.25s ease;
+  }
+  .fx-panel-open {
+    max-height: 1400px;
+  }
 }
 
 /* ── VU Meter ─────────────────────────────────────────────────── */

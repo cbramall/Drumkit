@@ -19,8 +19,9 @@ Live: [beatz-maker.netlify.app](https://beatz-maker.netlify.app)
 - **VU meter** — real-time frequency analyser display
 - **Save & load beats** — synced to Supabase for logged-in users, localStorage for guests
 - **Overwrite protection** — confirmation prompt before clobbering an existing beat
+- **Beat sharing** — "Share Your Beat" copies a URL-encoded link; effects, tempo, and grid are all encoded in the `?beat=` query param; a Netlify Edge Function serves rich Open Graph previews for bots/social cards
 - **User authentication** — email/password via Supabase Auth
-- **Keyboard shortcuts** — `Space` to play/stop, `Escape` to close modals
+- **Keyboard shortcuts** — `Space` to play/stop, `w` to toggle waveforms, `e` to toggle effects panel, `Escape` to close modals
 - **Error boundary** — graceful crash screen with reload instead of a blank page
 - **Cookie consent banner**, **Privacy Policy** (`/privacy`), and **Terms of Service** (`/terms`)
 
@@ -59,6 +60,8 @@ Run the SQL migrations **in order** in the Supabase SQL Editor:
 | `supabase/migrations/00001_beats.sql` | Creates the `beats` table + Row-Level Security policies |
 | `supabase/migrations/00002_beats_index_updated_at.sql` | Adds an index on `updated_at` for query performance |
 | `supabase/migrations/00003_beats_name_check.sql` | Server-side `CHECK` constraints on beat name length and allowed characters |
+| `supabase/migrations/00004_beats_effects.sql` | Adds nullable `effects` JSONB column so FX panel state is saved with each beat |
+| `supabase/migrations/00005_beats_sharing.sql` | Adds `is_public` flag and a public-read RLS policy for shared beats |
 
 ### Development
 
@@ -86,6 +89,7 @@ src/
     svg-paths.ts             # Toolbar icon SVG path data
   lib/
     audio-engine.ts          # Web Audio API drum synthesizer + effects chain
+    shareBeat.ts             # URL encode/decode for beat sharing (?beat= param)
     supabase.ts              # Supabase client singleton
     types.ts                 # Shared Grid and SavedBeat types
   hooks/
@@ -112,6 +116,9 @@ public/
   favicon.png
   robots.txt
   sitemap.xml
+netlify/
+  edge-functions/
+    share-preview.ts         # Serves OG meta tags for shared beat URLs (bots/social)
 supabase/
   migrations/                # SQL migrations (run in order)
 ```

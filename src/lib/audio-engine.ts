@@ -253,6 +253,22 @@ export function getEffectsState() {
   return { ...fxState };
 }
 
+/** Apply a saved EffectValues snapshot to the audio engine. */
+export function applyEffectsState(fx: {
+  reverb: number; delay: number; dryWet: number;
+  chorus: number; compression: number; cutoff: number;
+  resonance: number; swing: number;
+}): void {
+  setReverb(fx.reverb);
+  setDelayAmount(fx.delay);
+  setDryWet(fx.dryWet);
+  setChorus(fx.chorus);
+  setCompression(fx.compression);
+  setFilterCutoff(fx.cutoff);
+  setFilterResonance(fx.resonance);
+  setSwing(fx.swing);
+}
+
 export function getAnalyser(): AnalyserNode | null {
   return analyserNode;
 }

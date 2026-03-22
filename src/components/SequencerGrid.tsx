@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { INSTRUMENTS, INSTRUMENT_LABELS, STEPS, type InstrumentName } from '@/lib/audio-engine';
+import { useState, useEffect, useRef, useCallback, memo, type FC } from 'react';
+import { INSTRUMENTS, INSTRUMENT_LABELS, STEPS, initAudio, playInstrument, type InstrumentName } from '@/lib/audio-engine';
 import type { Grid } from '@/lib/types';
 
 type InstrumentColors = {
@@ -23,16 +23,23 @@ export const INSTRUMENT_COLORS: Record<InstrumentName, InstrumentColors> = {
 
 // ─── Grid Cell ──────────────────────────────────────────────────
 
+// B1: GridCell receives instrument+step as stable props and a single stable
+// onToggleCell reference. This lets memo work — a cell only re-renders when
+// its own `active` or `isCurrentStep` value changes, not on every App update.
 const GridCell = memo(function GridCell({
+  instrument,
+  step,
   active,
   isCurrentStep,
-  onClick,
+  onToggleCell,
   ariaLabel,
   colors,
 }: {
+  instrument: InstrumentName;
+  step: number;
   active: boolean;
   isCurrentStep: boolean;
-  onClick: () => void;
+  onToggleCell: (instrument: InstrumentName, step: number) => void;
   ariaLabel: string;
   colors: InstrumentColors;
 }) {
@@ -47,9 +54,9 @@ const GridCell = memo(function GridCell({
   }, []);
 
   const handleClick = useCallback(() => {
-    onClick();
+    onToggleCell(instrument, step);
     triggerFlash('click');
-  }, [onClick, triggerFlash]);
+  }, [onToggleCell, instrument, step, triggerFlash]);
 
   const isFiring = isCurrentStep && active;
   useEffect(() => {
@@ -83,17 +90,21 @@ const GridCell = memo(function GridCell({
 
   return (
     <button
+      type="button"
       onClick={handleClick}
       aria-label={ariaLabel}
+      aria-pressed={active}
       style={{
         background: bg,
         boxShadow,
         borderColor,
+        width: 'var(--cell)',
+        height: 'var(--cell)',
         transition: flash
           ? 'background 40ms, box-shadow 40ms, border-color 40ms'
           : 'background 400ms ease-out, box-shadow 400ms ease-out, border-color 400ms ease-out',
       }}
-      className="synth-cell relative rounded-[4px] shrink-0 size-[40px] cursor-pointer border-2 border-solid"
+      className="synth-cell relative rounded-[4px] shrink-0 cursor-pointer border-2 border-solid"
     >
       {active && (
         <div
@@ -114,68 +125,107 @@ interface SequencerGridProps {
   onToggleCell: (instrument: InstrumentName, step: number) => void;
 }
 
-export default function SequencerGrid({ grid, currentStep, onToggleCell }: SequencerGridProps) {
+const SequencerGrid: FC<SequencerGridProps> = memo(function SequencerGrid({ grid, currentStep, onToggleCell }) {
+  const [flashInst, setFlashInst] = useState<InstrumentName | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handlePreview = useCallback(async (inst: InstrumentName) => {
+    await initAudio();
+    playInstrument(inst);
+    setFlashInst(inst);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlashInst(null), 220);
+  }, []);
+
+  useEffect(() => () => { if (flashTimer.current) clearTimeout(flashTimer.current); }, []);
+
   return (
-    <div className="synth-grid-panel border-x-2 border-b-2 border-[#1a2050] rounded-bl-[4px] rounded-br-[4px] p-[24px] overflow-x-auto relative">
-      <div className="flex gap-[8px] min-w-fit relative z-[1]">
+    <div
+      className="synth-grid-panel border-x-2 border-b-2 border-[#1a2050] rounded-bl-[4px] rounded-br-[4px] overflow-x-auto relative"
+      style={{ padding: 'var(--grid-pad)' }}
+    >
+      <div className="min-w-fit relative z-[1]" style={{ display: 'flex', gap: 'var(--row-gap)', flexDirection: 'column' }}>
 
-        {/* Track title column */}
-        <div className="flex flex-col gap-[8px] shrink-0 w-[140px]">
-          <div className="flex items-center p-[8px] h-[40px]">
-            <p className="font-['Press_Start_2P',cursive] text-[#3a4a7a] text-[7px] tracking-[0.1em]">TRACKS</p>
+        {/* Header row: blank track label + step numbers */}
+        <div className="flex" style={{ gap: 'var(--row-gap)' }}>
+          {/* Empty corner above track labels */}
+          <div className="flex items-center shrink-0" style={{ width: 'var(--track-w)', height: 'var(--header-h)' }}>
+            <p className="font-['Press_Start_2P',cursive] text-[#3a4a7a] text-[5px] md:text-[7px] tracking-[0.1em]">TRACKS</p>
           </div>
-          {INSTRUMENTS.map((inst) => {
-            const c = INSTRUMENT_COLORS[inst];
-            return (
-              <div key={inst} className="flex items-center h-[56px]">
-                <p
-                  style={{ color: c.label, textShadow: `0 0 8px ${c.label}88, 0 0 20px ${c.label}44` }}
-                  className="font-['Press_Start_2P',cursive] leading-[1] text-[9px] whitespace-nowrap tracking-[0.05em]"
-                >
-                  {INSTRUMENT_LABELS[inst]}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Step columns */}
-        <div className="flex flex-col gap-[8px]">
           {/* Step numbers */}
-          <div className="flex h-[40px] items-center">
+          <div className="flex items-center" style={{ height: 'var(--header-h)' }}>
             {Array.from({ length: STEPS }, (_, i) => (
               <div
                 key={i}
                 style={{
                   color: currentStep === i ? '#ff2d78' : '#2a3a6a',
                   textShadow: currentStep === i ? '0 0 8px #ff2d7888, 0 0 18px #ff2d7844' : 'none',
-                  marginLeft: i > 0 && i % 4 === 0 ? '24px' : i > 0 ? '16px' : '0',
+                  marginLeft: i > 0 && i % 4 === 0 ? 'var(--cell-group-gap)' : i > 0 ? 'var(--cell-gap)' : '0',
+                  width: 'var(--cell)',
+                  height: 'var(--header-h)',
                 }}
-                className="size-[40px] flex items-center justify-center font-['Press_Start_2P',cursive] text-[8px] transition-colors"
+                className="flex items-center justify-center font-['Press_Start_2P',cursive] text-[6px] md:text-[8px] transition-colors shrink-0"
               >
                 {i + 1}
               </div>
             ))}
           </div>
-
-          {/* Instrument rows */}
-          {INSTRUMENTS.map((inst) => (
-            <div key={inst} className="flex items-center h-[56px]">
-              {Array.from({ length: STEPS }, (_, step) => (
-                <div key={step} style={{ marginLeft: step > 0 && step % 4 === 0 ? '24px' : step > 0 ? '16px' : '0' }}>
-                  <GridCell
-                    active={grid[inst][step]}
-                    isCurrentStep={currentStep === step}
-                    onClick={() => onToggleCell(inst, step)}
-                    ariaLabel={`${INSTRUMENT_LABELS[inst]} step ${step + 1}${grid[inst][step] ? ', active' : ''}`}
-                    colors={INSTRUMENT_COLORS[inst]}
-                  />
-                </div>
-              ))}
-            </div>
-          ))}
         </div>
+
+        {/* Instrument rows */}
+        {INSTRUMENTS.map((inst) => {
+          const c = INSTRUMENT_COLORS[inst];
+          return (
+            <div key={inst} className="flex" style={{ gap: 'var(--row-gap)', height: 'var(--row-h)' }}>
+              {/* Track label — click to preview the sound */}
+              <button
+                type="button"
+                onClick={() => handlePreview(inst)}
+                aria-label={`Preview ${INSTRUMENT_LABELS[inst]}`}
+                className="flex items-center shrink-0 cursor-pointer group"
+                style={{ width: 'var(--track-w)', height: 'var(--row-h)' }}
+              >
+                <p
+                  style={{
+                    color: c.label,
+                    textShadow: flashInst === inst
+                      ? `0 0 6px ${c.label}, 0 0 14px ${c.label}cc, 0 0 28px ${c.label}88`
+                      : `0 0 8px ${c.label}88, 0 0 20px ${c.label}44`,
+                    transition: flashInst === inst ? 'text-shadow 40ms' : 'text-shadow 300ms ease-out',
+                    filter: flashInst === inst ? `drop-shadow(0 0 4px ${c.label})` : 'none',
+                  }}
+                  className="font-['Press_Start_2P',cursive] leading-[1] text-[6px] md:text-[9px] whitespace-nowrap tracking-[0.05em]"
+                >
+                  {INSTRUMENT_LABELS[inst]}
+                </p>
+              </button>
+              {/* Step cells */}
+              <div className="flex items-center" style={{ height: 'var(--row-h)' }}>
+                {Array.from({ length: STEPS }, (_, step) => (
+                  <div
+                    key={step}
+                    style={{
+                      marginLeft: step > 0 && step % 4 === 0 ? 'var(--cell-group-gap)' : step > 0 ? 'var(--cell-gap)' : '0',
+                    }}
+                  >
+                    <GridCell
+                      instrument={inst}
+                      step={step}
+                      active={grid[inst][step]}
+                      isCurrentStep={currentStep === step}
+                      onToggleCell={onToggleCell}
+                      ariaLabel={`${INSTRUMENT_LABELS[inst]} step ${step + 1}${grid[inst][step] ? ', active' : ''}`}
+                      colors={INSTRUMENT_COLORS[inst]}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
-}
+});
+
+export default SequencerGrid;

@@ -9,11 +9,11 @@ export default function Navbar({ user, onSignUpClick, onSignInClick, onSignOut }
   return (
     <header className="retro-panel fixed top-0 left-0 right-0 z-20 w-full neon-border-bottom">
       <nav className="flex flex-row items-center justify-end overflow-clip rounded-[inherit] size-full">
-        <div className="content-stretch flex items-center justify-end px-[40px] py-[24px] relative w-full">
+          <div className="content-stretch flex items-center justify-end px-4 py-3 md:px-[40px] md:py-[24px] relative w-full">
           <div className="content-stretch flex gap-[8px] items-center justify-end relative z-10 shrink-0">
             {user ? (
               <>
-                <p className="font-['Press_Start_2P',cursive] text-[7px] text-[#7a8ab8] truncate max-w-[180px]">
+                <p className="font-['Press_Start_2P',cursive] text-[7px] text-[#7a8ab8] truncate max-w-[100px] md:max-w-[180px]">
                   {user.email}
                 </p>
                 <button
@@ -44,7 +44,7 @@ export default function Navbar({ user, onSignUpClick, onSignInClick, onSignOut }
             )}
           </div>
           <div className="-translate-x-1/2 -translate-y-1/2 absolute content-stretch flex items-center justify-center left-1/2 px-[16px] py-[4px] top-[calc(50%+1px)] pointer-events-none">
-            <h1 className="font-['Press_Start_2P',cursive] leading-[normal] relative shrink-0 text-[40px] chrome-text tracking-[0.08em]">
+            <h1 className="font-['Press_Start_2P',cursive] leading-[normal] relative shrink-0 text-[20px] md:text-[40px] chrome-text tracking-[0.08em]">
               BEATZ-MAKER
             </h1>
           </div>
