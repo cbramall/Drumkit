@@ -201,7 +201,8 @@
   border-color: rgba(42, 58, 106, 0.7);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  isolation: isolate;
+  /* isolation: isolate is intentionally omitted — combining it with backdrop-filter
+     causes the backdrop source to be transparent, making the blur invisible. */
 }
 
 .retro-btn-pink {
@@ -254,7 +255,7 @@
     0 4px 30px rgba(0, 0, 0, 0.4),
     0 0 1px rgba(0, 180, 255, 0.15),
     inset 0 0 40px rgba(0, 0, 0, 0.2);
-  isolation: isolate;
+  /* isolation: isolate removed — see .retro-panel comment */
 }
 
 .synth-cell {
