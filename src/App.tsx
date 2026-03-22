@@ -458,7 +458,7 @@ export default function App() {
                     {/* Divider + SHARE BEAT! CTA */}
                     {user && (
                       <>
-                        <div className="w-px h-[20px] bg-[#2a3a6a] mx-[4px] shrink-0" aria-hidden="true" />
+                        <div className="w-px h-[20px] bg-[#2a3a6a] mx-[18px] shrink-0" aria-hidden="true" />
                         <button
                           type="button"
                           onClick={handleShareBeat}
