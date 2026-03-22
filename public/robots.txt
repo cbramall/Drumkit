@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://superbeats.app/sitemap.xml
+Sitemap: https://beatz-maker.netlify.app/sitemap.xml
